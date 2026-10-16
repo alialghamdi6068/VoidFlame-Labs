@@ -29,7 +29,7 @@ services:
       AI_API_BASE: ${AI_API_BASE:-https://api.openai.com/v1}
       AI_API_KEY: ${AI_API_KEY:-}
       AI_MODEL: ${AI_MODEL:-gpt-4.1-mini}
-    networks: [scanner-internal]
+    networks: [scanner-internal, scanner-egress]
     read_only: true
     tmpfs:
       - /tmp:size=256m,noexec,nosuid,nodev
@@ -42,6 +42,8 @@ services:
 networks:
   scanner-internal:
     internal: true
+  scanner-egress:
+    driver: bridge
 
 volumes:
   clamav-signatures:
