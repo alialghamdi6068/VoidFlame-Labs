@@ -28,6 +28,19 @@ jobs:
           SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
         run: |
           printf 'window.VOIDFLAME_CONFIG = { supabaseUrl: "%s", supabaseAnonKey: "%s", ownerEmail: "alialghamdi6068@gmail.com" };\n' "$SUPABASE_URL" "$SUPABASE_ANON_KEY" > config.js
+      - name: Check JavaScript syntax
+        run: |
+          node --check auth.js
+          python3 - <<'PY'
+          import pathlib, re, subprocess
+          html = pathlib.Path("index.html").read_text()
+          scripts = re.findall(r"<script(?:\\s[^>]*)?>([\\s\\S]*?)</script>", html, re.I)
+          for index, script in enumerate(scripts):
+              if script.strip():
+                  path = pathlib.Path(f"/tmp/inline-{index}.js")
+                  path.write_text(script)
+                  subprocess.run(["node", "--check", str(path)], check=True)
+          PY
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
         with:
