@@ -98,13 +98,26 @@
   document.addEventListener("click",async event=>{
     const card=event.target.closest("[data-project]");if(!card)return;
     const p=projects.find(item=>item.id===card.dataset.project);if(!p?.remoteId)return;
-    show(p.name,'<p class="modal-note">'+p.type+' · by '+p.author+'</p><p style="font-size:13px;line-height:1.8;color:#c0bdcb">'+p.desc+'</p><p class="modal-note">'+p.downloads+' downloads</p><button class="btn btn-primary" id="downloadApproved" style="width:100%">Download latest release ↓</button>');
+    show(p.name,'<p class="modal-note">'+p.type+' · by '+p.author+'</p><p style="font-size:13px;line-height:1.8;color:#c0bdcb">'+p.desc+'</p><p class="modal-note">'+p.downloads+' downloads</p><div id="releaseDetails" class="modal-note">Loading latest approved release…</div><button class="btn btn-primary" id="downloadApproved" style="width:100%">Download latest release ↓</button>');
+    const releaseBox=$("releaseDetails");
+    const {data:latest}=await db.from("project_versions").select("version,game_versions,loaders,changelog,created_at").eq("project_id",p.remoteId).eq("status","approved").order("created_at",{ascending:false}).limit(1).maybeSingle();
+    if(releaseBox && latest){
+      const compatible=[...(latest.game_versions||[]),...(latest.loaders||[])].map(esc);
+      releaseBox.innerHTML='<strong style="color:#e5f6e9">Latest release '+esc(latest.version)+'</strong>'+(compatible.length?'<p>Compatibility: '+compatible.join(' · ')+'</p>':'')+(latest.changelog?'<p>Changelog: '+esc(latest.changelog).replace(/\n/g,'<br>')+'</p>':'');
+    }else if(releaseBox){releaseBox.textContent="No approved release is available yet.";}
     $("downloadApproved").onclick=async()=>{
-      const {data:v,error:ve}=await db.from("project_versions").select("file_path,file_name").eq("project_id",p.remoteId).eq("status","approved").order("created_at",{ascending:false}).limit(1).maybeSingle();
-      if(ve||!v){toast("No approved release is available yet.");return;}
-      const {data:link,error:le}=await db.storage.from("project-files").createSignedUrl(v.file_path,60);
-      if(le){toast(le.message);return;}
-      const a=document.createElement("a");a.href=link.signedUrl;a.download=v.file_name;a.rel="noopener";document.body.appendChild(a);a.click();a.remove();
+      const button=$("downloadApproved");button.disabled=true;button.textContent="Preparing download…";
+      try{
+        const {data:v,error:ve}=await db.from("project_versions").select("id,file_path,file_name").eq("project_id",p.remoteId).eq("status","approved").order("created_at",{ascending:false}).limit(1).maybeSingle();
+        if(ve||!v){toast("No approved release is available yet.");return;}
+        const {data:link,error:le}=await db.storage.from("project-files").createSignedUrl(v.file_path,60);
+        if(le)throw le;
+        const a=document.createElement("a");a.href=link.signedUrl;a.download=v.file_name;a.rel="noopener";document.body.appendChild(a);a.click();a.remove();
+        const {error:countError}=await db.rpc("increment_downloads",{target_project:p.remoteId});
+        if(!countError){p.downloads+=1;render();}
+        close();
+      }catch(e){toast("Download failed: "+(e.message||"Unknown error"));}
+      finally{if($("downloadApproved")){$("downloadApproved").disabled=false;$("downloadApproved").textContent="Download latest release ↓";}}
     };
   });
   replaceClick("signinBtn",auth);replaceClick("publishBtn",publish);replaceClick("ctaPublish",publish);
