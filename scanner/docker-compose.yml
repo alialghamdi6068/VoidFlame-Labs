@@ -10,6 +10,7 @@ services:
       start_period: 180s
     volumes:
       - clamav-signatures:/var/lib/clamav
+      - ./clamd.conf:/etc/clamav/clamd.conf:ro
     networks: [scanner-internal, scanner-egress]
 
   scanner:
