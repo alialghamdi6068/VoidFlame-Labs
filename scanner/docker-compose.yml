@@ -1,0 +1,47 @@
+services:
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "clamdcheck.sh || exit 1"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 180s
+    volumes:
+      - clamav-signatures:/var/lib/clamav
+    networks: [scanner-internal]
+
+  scanner:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      clamav:
+        condition: service_healthy
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL:?Set SUPABASE_URL in scanner/.env}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?Set SUPABASE_SERVICE_ROLE_KEY in scanner/.env}
+      CLAMD_HOST: clamav
+      CLAMD_PORT: "3310"
+      POLL_SECONDS: "15"
+      MAX_FILE_BYTES: "104857600"
+      AI_ENABLED: ${AI_ENABLED:-false}
+      AI_API_BASE: ${AI_API_BASE:-https://api.openai.com/v1}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gpt-4.1-mini}
+    networks: [scanner-internal]
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    mem_limit: 768m
+    cpus: 1.0
+
+networks:
+  scanner-internal:
+    internal: true
+
+volumes:
+  clamav-signatures:
