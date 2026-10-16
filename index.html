@@ -91,5 +91,8 @@ document.addEventListener('click',e=>{const card=e.target.closest('[data-project
 document.addEventListener('click',e=>{if(e.target.id==='mobileSearchGo'){const q=document.getElementById('mobileSearchInput').value;closeModal();setQuery(q)}});
 document.getElementById('year').textContent=new Date().getFullYear();render();
 </script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="auth.js"></script>
 </body>
 </html>
