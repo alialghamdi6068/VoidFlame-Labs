@@ -11,6 +11,7 @@ This guide covers the remaining account-owned setup. The repository code cannot 
    - `supabase/002-security-hardening.sql`
    - `supabase/003-bootstrap-and-moderation.sql`
    - `supabase/004-manager-demotion.sql`
+   - `supabase/005-specialist-permissions.sql`
 4. Open **Project Settings → API** and copy the Project URL and public anon/publishable key. Do not copy the service-role/secret key into the site.
 
 ## 2. Configure Google sign-in
@@ -63,3 +64,19 @@ If the owner account signs in before running the SQL bootstrap, run `supabase/00
 - The frontend restricts uploads to .jar/.zip up to 100 MB. This is not malware scanning; do not treat it as proof that a plugin is safe.
 - Before opening public submissions broadly, add server-side archive inspection, abuse reporting, rate limits, and a backup/restore procedure.
 - The application code does not provide real OAuth credentials or create the Supabase project. Those steps require access to your provider accounts.
+
+
+## 7. Permission roles and review workflow
+
+The `005-specialist-permissions.sql` migration adds separate roles:
+- **Owner** — full platform authority.
+- **Manager** — manages staff permissions and coordinates moderation; only the owner can appoint or remove managers.
+- **Security Reviewer** — reviews uploaded release files and records a clean, flagged, or rejected verdict.
+- **Content Moderator** — reviews project descriptions, categories, and metadata.
+- **Developer / Publisher** — can submit plugins, mods, modpacks, shaders, resource packs, and other supported project types.
+- **Member** — browsing account without publishing rights by default.
+- **Suspended** — publishing disabled; enforce any broader sign-in restrictions separately if desired.
+
+A release starts with `security_status = 'pending_scan'`. It must be marked `clean` before a content moderator can approve the project. Flagged or rejected files cannot be approved through the normal moderation RPC. Security review currently records staff verdicts; it is **not an antivirus scanner**. Do not call a file safe based only on its extension or a human review.
+
+Managers can assign specialist roles from the `set_staff_role` database function. The current Manager page may need a matching UI update to expose the new role-assignment and review queues; the migration provides the database permissions and server-side checks, not an automatic malware-analysis service.
