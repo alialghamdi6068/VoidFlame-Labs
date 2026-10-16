@@ -73,6 +73,30 @@
     } catch(e){$("managerContent").textContent="Could not load manager data: "+e.message;}
   }
   async function moderate(id,status){const {error}=await db.rpc("moderate_project",{target_project:id,next_status:status});if(error)toast(error.message);else{toast("Project "+status+".");manager();}}
+  async function loadApprovedProjects(){
+    if(!db || typeof projects==="undefined" || typeof render!=="function")return;
+    const {data,error}=await db.from("projects").select("id,name,summary,category,downloads,owner_id,supported_versions").eq("status","approved").order("downloads",{ascending:false}).limit(100);
+    if(error)return;
+    const {data:owners}=data.length?await db.from("profiles").select("id,display_name").in("id",[...new Set(data.map(p=>p.owner_id))]):{data:[]};
+    const names=new Map((owners||[]).map(p=>[p.id,p.display_name||"Community creator"]));
+    for(const p of data){
+      if(projects.some(item=>item.remoteId===p.id))continue;
+      projects.push({id:"db-"+p.id,remoteId:p.id,name:esc(p.name),author:esc(names.get(p.owner_id)||"Community creator"),type:p.category,icon:"✦",color:"#bba7ff",bg:"linear-gradient(135deg,#30254e,#191a25)",desc:esc(p.summary),tags:(p.supported_versions||[]).slice(0,3).map(esc),downloads:Number(p.downloads)||0,stars:"—",verified:false});
+    }
+    render();
+  }
+  document.addEventListener("click",async event=>{
+    const card=event.target.closest("[data-project]");if(!card)return;
+    const p=projects.find(item=>item.id===card.dataset.project);if(!p?.remoteId)return;
+    show(p.name,'<p class="modal-note">'+p.type+' · by '+p.author+'</p><p style="font-size:13px;line-height:1.8;color:#c0bdcb">'+p.desc+'</p><p class="modal-note">'+p.downloads+' downloads</p><button class="btn btn-primary" id="downloadApproved" style="width:100%">Download latest release ↓</button>');
+    $("downloadApproved").onclick=async()=>{
+      const {data:v,error:ve}=await db.from("project_versions").select("file_path,file_name").eq("project_id",p.remoteId).eq("status","approved").order("created_at",{ascending:false}).limit(1).maybeSingle();
+      if(ve||!v){toast("No approved release is available yet.");return;}
+      const {data:link,error:le}=await db.storage.from("project-files").createSignedUrl(v.file_path,60);
+      if(le){toast(le.message);return;}
+      const a=document.createElement("a");a.href=link.signedUrl;a.download=v.file_name;a.rel="noopener";document.body.appendChild(a);a.click();a.remove();
+    };
+  });
   replaceClick("signinBtn",auth);replaceClick("publishBtn",publish);replaceClick("ctaPublish",publish);
-  if(db){db.auth.onAuthStateChange(()=>setTimeout(refresh,0));refresh();}
+  if(db){db.auth.onAuthStateChange(()=>setTimeout(async()=>{await refresh();await loadApprovedProjects();},0));refresh().then(loadApprovedProjects);}
 })();
