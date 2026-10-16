@@ -1,7 +1,6 @@
 name: Submit a project
 description: Submit a Minecraft project for review and listing on VoidFlame Labs.
 title: "[Project submission]: "
-labels: ["project-submission"]
 body:
   - type: markdown
     attributes:
