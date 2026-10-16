@@ -239,6 +239,7 @@ def scan_bytes(data: bytes, filename: str, yara_rules) -> dict:
         "archive_path_traversal", "archive_expansion_limit_exceeded",
         "archive_entry_limit_exceeded", "invalid_or_corrupt_zip_archive",
         "unexpected_executable_in_archive", "invalid_archive_size",
+        "nested_archive_requires_review",
     ))
     if severe_archive or result["yara_matches"]:
         result["verdict"] = "flagged"
