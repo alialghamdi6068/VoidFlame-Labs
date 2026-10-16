@@ -1,28 +1,50 @@
 # VoidFlame Labs
 
-A modern discovery platform concept for community-made Minecraft content: mods, plugins, modpacks, shaders, and resource packs.
+A modern Minecraft content platform for discovering and publishing mods, plugins, modpacks, shaders, resource packs, and tools.
 
-## Current status
+## Features in the repository
 
-This repository currently contains a responsive, interactive **frontend prototype** in `index.html`. It includes:
-- Responsive dark UI with VoidFlame Labs branding
-- Project category navigation and filters
-- Search across project names, descriptions, creators, and tags
-- Sorting by name and downloads
-- Sample project cards and detail modals
-- Publish and sign-in preview dialogs
-- Keyboard shortcut `/` to focus search
+- Responsive discovery UI with categories, search, sorting, and project details.
+- Google and GitHub OAuth sign-in via Supabase Auth.
+- Permission-gated project publishing: users cannot upload unless the owner or a manager grants publishing access.
+- Manager workspace for granting/revoking publishing permissions and reviewing submissions.
+- Owner-only manager appointment and removal.
+- Project and release moderation with private file storage and signed downloads for approved releases.
+- Supabase database policies and server-side RPCs in `supabase/`.
 
-## Important limitations
+## Required setup before live authentication/uploads work
 
-This is a frontend prototype, not a production marketplace yet. The displayed project data is sample content. Authentication, file uploads, virus scanning, real download hosting, creator accounts, ratings, moderation, and database persistence are **not implemented**. The UI labels these actions as previews rather than claiming that they work.
+This repository intentionally does not include backend credentials. The frontend needs a Supabase project before OAuth or uploads can work.
+
+1. Create a Supabase project.
+2. In the Supabase SQL Editor, run these files in order:
+   - `supabase/schema.sql`
+   - `supabase/002-security-hardening.sql`
+   - `supabase/003-bootstrap-and-moderation.sql`
+3. Copy `config.example.js` to `config.js` and set `supabaseUrl` and `supabaseAnonKey` from Supabase Project Settings → API. The example file is safe to commit; **do not commit `config.js`**.
+4. In Supabase Authentication settings, enable Google and GitHub providers and add each provider's OAuth client ID/secret. Add the deployed site's URL to the allowed redirect URLs. Configure the correct site URL for local testing too.
+5. The SQL bootstrap currently recognizes `alialghamdi6068@gmail.com` as the owner. Confirm this is the correct email before relying on owner permissions. The owner must sign in with that exact verified email.
+6. For GitHub Pages, open repository Settings → Pages and choose GitHub Actions as the source. The included workflow deploys the static files, but a private repository may require a plan that supports GitHub Pages.
+
+## Upload and moderation flow
+
+1. A creator signs in with Google or GitHub.
+2. The owner/manager finds the account in the manager workspace and grants publishing permission. The creator must sign in at least once before their profile exists.
+3. The creator uploads a .jar or .zip release (up to 100 MB) with project metadata.
+4. The submission remains pending until a manager approves or rejects it.
+5. Approved projects and approved release files can be discovered and downloaded. Files remain in a private Supabase Storage bucket; the site creates short-lived signed download URLs.
+
+## Security notes
+
+- Never put a Supabase service-role key in browser code. Only the public anon/publishable key belongs in `config.js`; row-level security controls access.
+- The schema limits uploads to .jar/.zip and 100 MB. This is not malware scanning. Before opening public uploads at scale, add server-side archive inspection/antivirus scanning, rate limits, abuse reporting, and backups.
+- OAuth works only after the provider credentials and callback URLs are configured in Supabase. Creating the files alone cannot activate provider credentials.
+- The site uses a static frontend plus Supabase services; no backend credentials have been configured or tested from this repository session.
 
 ## Run locally
 
-Open `index.html` in a modern browser. No build step is required.
+Serve the repository directory with a local static HTTP server, create an untracked `config.js` from `config.example.js`, and open the local URL in a browser. Opening `index.html` directly with `file://` may not work reliably for OAuth redirects.
 
-## Publish with GitHub Pages
+## Deployment
 
-1. Open **Settings → Pages** in this repository.
-2. Under **Build and deployment**, choose **GitHub Actions** as the source.
-3. Push to `main`; the included workflow deploys the static site.
+Push to `main`; the GitHub Actions workflow runs the GitHub Pages deployment. The repository's Pages settings and Supabase OAuth redirect allowlist must still be configured.
