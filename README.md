@@ -24,7 +24,8 @@ This repository intentionally does not include backend credentials. The frontend
 3. Copy `config.example.js` to `config.js` and set `supabaseUrl` and `supabaseAnonKey` from Supabase Project Settings → API. The example file is safe to commit; **do not commit `config.js`**.
 4. In Supabase Authentication settings, enable Google and GitHub providers and add each provider's OAuth client ID/secret. Add the deployed site's URL to the allowed redirect URLs. Configure the correct site URL for local testing too.
 5. The SQL bootstrap currently recognizes `alialghamdi6068@gmail.com` as the owner. Confirm this is the correct email before relying on owner permissions. The owner must sign in with that exact verified email.
-6. For GitHub Pages, open repository Settings → Pages and choose GitHub Actions as the source. The included workflow deploys the static files, but a private repository may require a plan that supports GitHub Pages.
+6. For deployment, add repository **Actions variables** named `SUPABASE_URL` and `SUPABASE_ANON_KEY` under Settings → Secrets and variables → Actions → Variables. These are public browser settings, not service-role credentials. The workflow writes `config.js` only into the deploy artifact; it does not commit it.
+7. Open repository Settings → Pages and choose GitHub Actions as the source. A private repository may require a plan that supports GitHub Pages.
 
 ## Upload and moderation flow
 
