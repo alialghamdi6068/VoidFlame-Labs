@@ -32,11 +32,11 @@
     if(!db){auth();return;}
     if(!user){auth();toast("Sign in first.");return;}
     if(!profile?.can_publish&&!["owner","manager"].includes(profile?.role)){toast("A manager must grant you publishing permission first.");return;}
-    show("Publish a project",'<p class="modal-note">Submissions are reviewed before publication. Upload a .jar or .zip file up to 100 MB.</p><label class="field">Project name<input id="upName" maxlength="80"></label><label class="field">Description<input id="upSummary" maxlength="240"></label><label class="field">Type<select id="upCategory"><option>Plugins</option><option>Mods</option><option>Modpacks</option><option>Shaders</option><option>Resource Packs</option><option>Tools</option><option>Other</option></select></label><label class="field">Minecraft versions<input id="upVersions" placeholder="1.21.1, 1.21.4"></label><label class="field">Loader / platform<input id="upLoader" placeholder="Paper, Fabric, NeoForge..."></label><label class="field">Release version<input id="upVersion" placeholder="1.0.0"></label><label class="field">File<input id="upFile" type="file" accept=".jar,.zip" required></label><label class="field">Changelog<textarea id="upChangelog"></textarea></label><button class="btn btn-primary" id="uploadBtn" style="width:100%">Upload for review</button>');
+    show("Publish a project",'<p class="modal-note">Submissions are reviewed before publication. Upload a .jar or .zip file up to 100 MB.</p><label class="field">Project name<input id="upName" maxlength="80"></label><label class="field">Short description<input id="upSummary" maxlength="240" placeholder="A concise summary shown on project cards"></label><label class="field">Full description<textarea id="upDescription" maxlength="12000" placeholder="Features, installation, usage, dependencies, and other details"></textarea></label><label class="field">Type<select id="upCategory"><option>Plugins</option><option>Mods</option><option>Modpacks</option><option>Shaders</option><option>Resource Packs</option><option>Tools</option><option>Other</option></select></label><label class="field">Minecraft versions<input id="upVersions" placeholder="1.21.1, 1.21.4"></label><label class="field">Loader / platform<input id="upLoader" placeholder="Paper, Fabric, NeoForge..."></label><label class="field">Release version<input id="upVersion" placeholder="1.0.0"></label><label class="field">File<input id="upFile" type="file" accept=".jar,.zip" required></label><label class="field">Changelog<textarea id="upChangelog"></textarea></label><button class="btn btn-primary" id="uploadBtn" style="width:100%">Upload for review</button>');
     $("uploadBtn").onclick=upload;
   }
   async function upload() {
-    const b=$("uploadBtn"), file=$("upFile").files[0], name=$("upName").value.trim(), summary=$("upSummary").value.trim(), version=$("upVersion").value.trim();
+    const b=$("uploadBtn"), file=$("upFile").files[0], name=$("upName").value.trim(), summary=$("upSummary").value.trim(), description=$("upDescription").value.trim() || summary, version=$("upVersion").value.trim();
     if(!name||summary.length<10||!version||!file){toast("Fill in the required fields and select a file.");return;}
     if(!/\.(jar|zip)$/i.test(file.name)||file.size>104857600){toast("Only .jar/.zip files up to 100 MB are accepted.");return;}
     b.disabled=true;b.textContent="Uploading…";
@@ -45,7 +45,7 @@
       const versions=$("upVersions").value.split(",").map(s=>s.trim()).filter(Boolean), loader=$("upLoader").value.trim(), id=crypto.randomUUID();
       projectId = id;
       const slug=(name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,50)||"project")+"-"+id.slice(0,8);
-      const {error:pe}=await db.from("projects").insert({id,slug,name,summary,description:summary,category:$("upCategory").value,game:"Minecraft",loader,supported_versions:versions,status:"pending",owner_id:user.id});
+      const {error:pe}=await db.from("projects").insert({id,slug,name,summary,description,category:$("upCategory").value,game:"Minecraft",loader,supported_versions:versions,status:"pending",owner_id:user.id});
       if(pe)throw pe;
       projectCreated = true;
       const fileName=file.name.replace(/[^a-zA-Z0-9._-]/g,"_"), path=user.id+"/"+id+"/"+fileName;
@@ -85,20 +85,20 @@
   async function moderate(id,status){const {error}=await db.rpc("moderate_project",{target_project:id,next_status:status});if(error)toast(error.message);else{toast("Project "+status+".");manager();}}
   async function loadApprovedProjects(){
     if(!db || typeof projects==="undefined" || typeof render!=="function")return;
-    const {data,error}=await db.from("projects").select("id,name,summary,category,downloads,owner_id,supported_versions").eq("status","approved").order("downloads",{ascending:false}).limit(100);
+    const {data,error}=await db.from("projects").select("id,name,summary,description,category,downloads,owner_id,supported_versions").eq("status","approved").order("downloads",{ascending:false}).limit(100);
     if(error)return;
     const {data:owners}=data.length?await db.from("profiles").select("id,display_name").in("id",[...new Set(data.map(p=>p.owner_id))]):{data:[]};
     const names=new Map((owners||[]).map(p=>[p.id,p.display_name||"Community creator"]));
     for(const p of data){
       if(projects.some(item=>item.remoteId===p.id))continue;
-      projects.push({id:"db-"+p.id,remoteId:p.id,name:esc(p.name),author:esc(names.get(p.owner_id)||"Community creator"),type:p.category,icon:"✦",color:"#bba7ff",bg:"linear-gradient(135deg,#30254e,#191a25)",desc:esc(p.summary),tags:(p.supported_versions||[]).slice(0,3).map(esc),downloads:Number(p.downloads)||0,stars:"—",verified:false});
+      projects.push({id:"db-"+p.id,remoteId:p.id,name:esc(p.name),author:esc(names.get(p.owner_id)||"Community creator"),type:p.category,icon:"✦",color:"#bba7ff",bg:"linear-gradient(135deg,#30254e,#191a25)",desc:esc(p.summary),details:esc(p.description||p.summary),tags:(p.supported_versions||[]).slice(0,3).map(esc),downloads:Number(p.downloads)||0,stars:"—",verified:false});
     }
     render();
   }
   document.addEventListener("click",async event=>{
     const card=event.target.closest("[data-project]");if(!card)return;
     const p=projects.find(item=>item.id===card.dataset.project);if(!p?.remoteId)return;
-    show(p.name,'<p class="modal-note">'+p.type+' · by '+p.author+'</p><p style="font-size:13px;line-height:1.8;color:#c0bdcb">'+p.desc+'</p><p class="modal-note">'+p.downloads+' downloads</p><div id="releaseDetails" class="modal-note">Loading latest approved release…</div><button class="btn btn-primary" id="downloadApproved" style="width:100%">Download latest release ↓</button>');
+    show(p.name,'<p class="modal-note">'+p.type+' · by '+p.author+'</p><p style="font-size:13px;line-height:1.8;color:#c0bdcb">'+(p.details||p.desc)+'</p><p class="modal-note">'+p.downloads+' downloads</p><div id="releaseDetails" class="modal-note">Loading latest approved release…</div><button class="btn btn-primary" id="downloadApproved" style="width:100%">Download latest release ↓</button>');
     const releaseBox=$("releaseDetails");
     const {data:latest}=await db.from("project_versions").select("version,game_versions,loaders,changelog,created_at").eq("project_id",p.remoteId).eq("status","approved").order("created_at",{ascending:false}).limit(1).maybeSingle();
     if(releaseBox && latest){
