@@ -1,51 +1,77 @@
 # VoidFlame Labs
 
-A modern Minecraft content platform for discovering and publishing mods, plugins, modpacks, shaders, resource packs, and tools.
+A modern, dark-first Minecraft creator marketplace for discovering and publishing mods, plugins, modpacks, shaders, resource packs, and tools. The interface takes cues from contemporary community marketplaces such as Modrinth while keeping VoidFlame's own branding and design.
 
-## Features in the repository
+## Product experience
 
-- Responsive discovery UI with categories, search, sorting, and project details.
-- Account registration and sign-in with email/password, Google, or GitHub via Supabase Auth.
-- Permission-gated project publishing: users cannot upload unless the owner or a manager grants publishing access.
-- Separate staff role management, security review queue, and content review queue.
-- Owner-only manager appointment/removal; manager-assigned Developer, Security Reviewer, and Content Moderator roles.
-- Project and release moderation with private file storage and signed downloads for approved releases.
-- Supabase database policies and server-side RPCs in `supabase/`.
+- Responsive discovery page with project search, category filters, sorting, and release details.
+- Live marketplace cards are populated from approved Supabase projects; hardcoded sample projects are not presented as real community uploads.
+- Account registration and sign-in with email/password, Google, or GitHub through Supabase Auth.
+- Permission-gated publishing: users need explicit publishing access or an authorized staff role.
+- Separate staff tools for role assignment, security review, and content moderation.
+- Private file storage with short-lived signed downloads for approved releases.
+- Automated server-side file scanning service using ClamAV, archive/path checks, SHA-256 integrity checks, static indicators, optional YARA rules, and optional AI-assisted triage.
+- SQL migrations for database policies, staff roles, moderation, and scan report metadata.
 
-## Required setup before live authentication/uploads work
+## Required Supabase setup
 
-This repository intentionally does not include backend credentials. The frontend needs a Supabase project before OAuth or uploads can work.
+Create a Supabase project, then run the SQL files in this exact order in **Supabase → SQL Editor**:
 
-1. Create a Supabase project.
-2. In the Supabase SQL Editor, run these files in order:
-   - `supabase/schema.sql`
-   - `supabase/002-security-hardening.sql`
-   - `supabase/003-bootstrap-and-moderation.sql`
-3. Copy `config.example.js` to `config.js` and set `supabaseUrl` and `supabaseAnonKey` from Supabase Project Settings → API. The example file is safe to commit; **do not commit `config.js`**.
-4. In Supabase Authentication settings, enable Google and GitHub providers and add each provider's OAuth client ID/secret. Add the deployed site's URL to the allowed redirect URLs. Configure the correct site URL for local testing too.
-5. The SQL bootstrap currently recognizes `alialghamdi6068@gmail.com` as the owner. Confirm this is the correct email before relying on owner permissions. The owner must sign in with that exact verified email.
-6. For deployment, add repository **Actions variables** named `SUPABASE_URL` and `SUPABASE_ANON_KEY` under Settings → Secrets and variables → Actions → Variables. These are public browser settings, not service-role credentials. The workflow writes `config.js` only into the deploy artifact; it does not commit it.
-7. Open repository Settings → Pages and choose GitHub Actions as the source. A private repository may require a plan that supports GitHub Pages.
+1. `supabase/schema.sql`
+2. `supabase/002-security-hardening.sql`
+3. `supabase/003-bootstrap-and-moderation.sql`
+4. `supabase/004-manager-demotion.sql`
+5. `supabase/005-specialist-permissions.sql`
+6. `supabase/006-automated-security-scanning.sql`
 
-## Upload and moderation flow
+The bootstrap recognizes `alialghamdi6068@gmail.com` as the owner. The account must sign in with that exact verified email. The database migration does not run automatically just because the repository was updated.
 
-1. A creator signs in with Google or GitHub.
-2. The owner/manager finds the account in the manager workspace and grants publishing permission. The creator must sign in at least once before their profile exists.
-3. The creator uploads a .jar or .zip release (up to 100 MB) with project metadata.
-4. The submission remains pending until a manager approves or rejects it.
-5. Approved projects and approved release files can be discovered and downloaded. Files remain in a private Supabase Storage bucket; the site creates short-lived signed download URLs.
+### Frontend configuration
 
-## Security notes
+1. Copy `config.example.js` to `config.js` for local testing and enter the Supabase project URL and public anon/publishable key.
+2. For GitHub Pages, add Actions variables named `SUPABASE_URL` and `SUPABASE_ANON_KEY` under **Settings → Secrets and variables → Actions → Variables**.
+3. Enable Email, Google, and GitHub providers in Supabase Auth as needed. Configure OAuth callback URLs and allowed redirect URLs using the values Supabase displays.
+4. Set GitHub Pages to use GitHub Actions and check the deployment workflow.
 
-- Never put a Supabase service-role key in browser code. Only the public anon/publishable key belongs in `config.js`; row-level security controls access.
-- The schema limits uploads to .jar/.zip and 100 MB. This is not malware scanning. Before opening public uploads at scale, add server-side archive inspection/antivirus scanning, rate limits, abuse reporting, and backups.
-- OAuth works only after the provider credentials and callback URLs are configured in Supabase. Creating the files alone cannot activate provider credentials.
-- The site uses a static frontend plus Supabase services; no backend credentials have been configured or tested from this repository session.
+Only the public anon/publishable key belongs in frontend code. **Never place the Supabase service-role/secret key in `config.js`, browser JavaScript, or frontend build variables.**
 
-## Run locally
+See [SETUP.md](SETUP.md) for detailed provider, deployment, owner access, and scanner activation instructions.
 
-Serve the repository directory with a local static HTTP server, create an untracked `config.js` from `config.example.js`, and open the local URL in a browser. Opening `index.html` directly with `file://` may not work reliably for OAuth redirects.
+## Publishing and review flow
 
-## Deployment
+1. A creator signs in at least once.
+2. The owner or manager grants publishing access or assigns an eligible publisher role.
+3. The creator submits project metadata and a `.jar` or `.zip` release up to 100 MB.
+4. The release starts with `security_status = 'pending_scan'`.
+5. The separate scanner service checks the uploaded file and stores a report. Incomplete required scans stay pending.
+6. Flagged files require security review. Content moderators cannot approve a project unless every release has a `clean` security status.
+7. Approved projects appear in discovery; approved release files are delivered through short-lived signed URLs.
 
-Push to `main`; the GitHub Actions workflow runs the GitHub Pages deployment. The repository's Pages settings and Supabase OAuth redirect allowlist must still be configured.
+## Automated security scanning
+
+The scanner is a separate Docker service in `scanner/`; GitHub Pages does not run it. Follow the scanner section in [SETUP.md](SETUP.md):
+
+- Start with `scanner/.env.example` and keep real credentials out of Git.
+- Run the scanner using Docker Compose on a trusted host that can connect to Supabase.
+- ClamAV provides signature scanning; additional checks inspect archive paths, compression ratios, suspicious indicators, and SHA-256.
+- Reviewed YARA rules can be added to `scanner/rules/`.
+- Optional AI triage is advisory. It receives bounded extracted text and scan indicators rather than the complete binary; it can raise a flag but cannot independently mark a file clean.
+- No scanner can guarantee that a file is safe. Keep signatures and images updated, restrict access to scanner credentials, and review flagged submissions.
+
+## Roles
+
+- **Owner:** full platform authority.
+- **Manager:** publishing permissions, staff assignments within allowed roles, and moderation workflows; only the owner can appoint or remove managers.
+- **Security Reviewer:** investigates scan results and records security verdicts.
+- **Content Moderator:** reviews project metadata and publication decisions.
+- **Developer / Publisher:** submits projects when authorized.
+- **Member:** browses the marketplace without publishing permission by default.
+- **Suspended:** publishing disabled.
+
+## Local development
+
+Serve the repository with a local static HTTP server rather than opening `index.html` using `file://`. Create an untracked `config.js` from `config.example.js` and configure Supabase first. OAuth, live discovery, upload, and signed downloads require a working Supabase project.
+
+## Current validation status
+
+JavaScript syntax and migration ordering have been checked in the repository workflow. A live Supabase project, OAuth end-to-end flow, browser visual QA, Docker image build, and real-file malware scanning still need to be run in the configured deployment environment.
