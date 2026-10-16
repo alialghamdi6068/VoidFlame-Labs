@@ -26,6 +26,68 @@ footer{border-top:1px solid #ffffff10;padding:27px 0 35px;color:#838192;font-siz
 @media(max-width:1000px){.shell{padding:0 23px}.nav{gap:18px}.navlinks{gap:14px}.search-top{width:170px}.hero-grid{gap:10px}.project-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.categories{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:720px){.shell{padding:0 17px}.nav{height:65px}.navlinks{display:none}.search-top{display:none}.navright .btn:not(.btn-primary){display:none}.mobile-menu{display:block;background:transparent;border:0;color:white;font-size:21px}.hero{padding:50px 0 28px}.hero-grid{grid-template-columns:1fr}.hero-art{min-height:310px;margin-top:10px}.orbit{width:280px;height:280px}.orbit.two{width:210px;height:210px}.orbit.three{width:350px;height:350px}.core-card{width:245px}.float-card.one{right:0;top:22px}.float-card.two{left:0;bottom:15px}h1{font-size:51px;letter-spacing:-2.7px}.hero-copy{font-size:13px}.stats{margin-bottom:48px;grid-template-columns:repeat(2,1fr);gap:17px;padding:18px 8px}.stat:nth-child(2){border:0}.stat strong{font-size:20px}.categories{grid-template-columns:repeat(2,1fr);gap:9px;margin-bottom:48px}.category{min-height:120px;padding:14px}.project-grid{grid-template-columns:1fr}.project-banner{height:125px}.section{padding-bottom:50px}.section h2{font-size:24px}.section-head{align-items:start}.feature-strip{grid-template-columns:1fr;margin-bottom:48px}.feature{padding:19px;gap:14px}.cta{padding:23px;align-items:start;flex-direction:column;margin-bottom:48px}.cta h2{font-size:24px}.footer-inner{align-items:start;flex-direction:column}.footer-links{flex-wrap:wrap}.sort{margin-left:0}.filter-row{align-items:center}.filter{padding:8px 10px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+
+/* VoidFlame Labs marketplace refresh — original styling, informed by modern creator marketplaces */
+:root{--bg:#151719;--panel:#1d2022;--panel2:#25292b;--line:#34393b;--muted:#a5ada9;--text:#f4f7f5;--purple:#a8e6bd;--purple2:#3dba75;--mint:#a8e6bd;--radius:14px}
+body{background:var(--bg);color:var(--text)}
+.shell{max-width:1500px;padding-left:clamp(18px,3.2vw,48px);padding-right:clamp(18px,3.2vw,48px)}
+.nav{height:68px;gap:30px;background:#151719f2;border-bottom:1px solid #ffffff12}
+.brand{font-size:18px}.brand-mark{background:linear-gradient(145deg,#b9f2ca,#49c77d);box-shadow:none;color:#14271b}
+.brand em{color:#a8e6bd}
+.navlinks{gap:21px}.navlinks a{padding:23px 0;position:relative}.navlinks a.active{color:#b8f3ca}.navlinks a.active:after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:2px;background:#77d998}
+.search-top{background:#202426;border-color:#3b4142;border-radius:10px;width:235px}.search-top:focus-within,.hero-search:focus-within{border-color:#71d894;box-shadow:0 0 0 3px #71d89416}
+.btn{background:#24282a;border-color:#3b4142;border-radius:9px;padding:10px 14px}.btn:hover{border-color:#6a9b7a;transform:translateY(-1px)}
+.btn-primary{background:#a8e6bd;border-color:#a8e6bd;color:#122218;box-shadow:none}.btn-primary:hover{background:#bff0ce;filter:none}
+.hero{padding:46px 0 25px}.hero:before{width:500px;height:320px;right:5%;top:-120px;background:radial-gradient(ellipse,#71d89412,transparent 70%)}
+.hero-grid{grid-template-columns:1.2fr .8fr;gap:24px}
+.eyebrow{border-color:#365441;background:#203126;color:#b8f0c7;letter-spacing:.15px}
+.dot{background:#7ce39b;box-shadow:0 0 9px #7ce39b66}
+h1{font-size:clamp(40px,4.5vw,62px);letter-spacing:-3px;line-height:1.04;margin:18px 0 14px}
+h1 span{background:linear-gradient(100deg,#b9f2ca,#75d996 65%,#c7f0d3);-webkit-background-clip:text;background-clip:text}
+.hero-copy{font-size:14px;line-height:1.75;max-width:540px;margin-bottom:21px}
+.hero-search{background:#202426;border-color:#3a4141;border-radius:11px;box-shadow:none;max-width:590px}
+.hero-search input{font-size:13px}.hero-search .btn{padding:11px 16px}
+.pill{background:#202426;border-color:#3b4142;border-radius:7px;color:#b9c4be}.pill:hover{border-color:#6ebd88;color:#d8ffe3}
+.hero-art{min-height:300px}.orbit{border-color:#8de7a31c;width:300px;height:300px}.orbit.two{width:225px;height:225px;border-color:#8de7a31b}.orbit.three{width:370px;height:370px;border-color:#ffffff0b}
+.core-card{width:260px;border-color:#3d5a45;border-radius:17px;background:linear-gradient(145deg,#29372d,#202426);box-shadow:0 22px 70px #0003;transform:rotate(-2deg)}
+.core-icon{background:linear-gradient(140deg,#b9f2ca,#55ca81);color:#15241a}
+.status{color:#b8f0c7;background:#a8e6bd12;border-color:#a8e6bd2b}
+.float-card{background:#24292a;border-color:#414947;border-radius:10px;box-shadow:0 12px 30px #0003}.mini-icon{background:#a8e6bd1c;color:#a8e6bd}.mini-icon.purple{background:#a8e6bd1c;color:#a8e6bd}
+.stats{margin:8px 0 49px;padding:16px 10px;background:#1d2022;border-color:#34393b;border-radius:12px}
+.stat strong{font-size:18px;letter-spacing:-.4px}.stat span{font-size:10px}.stat{border-color:#ffffff12}
+.section{padding-bottom:54px}.section-head{margin-bottom:18px}.kicker{color:#a8e6bd;letter-spacing:1.3px}.section h2{font-size:25px;letter-spacing:-.7px}.sub{font-size:12px;color:#a5ada9}.text-link{color:#a8e6bd}
+.categories{gap:10px;margin-bottom:48px;grid-template-columns:repeat(5,minmax(0,1fr))}
+.category{background:#1d2022;border-color:#34393b;border-radius:12px;padding:15px;min-height:120px}
+.category:hover{border-color:#5d9e70;background:#222a24;transform:translateY(-2px)}
+.cat-icon{border-radius:10px}
+.filter-row{gap:8px;margin-bottom:16px}
+.filter,.sort{background:#202426;border-color:#3b4142;border-radius:8px;color:#b8c2bd;padding:9px 12px}
+.filter.selected,.filter:hover{background:#293e30;color:#c7f7d3;border-color:#5c9d6d}
+.project-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
+.project{background:#1d2022;border-color:#34393b;border-radius:13px;cursor:pointer}
+.project:hover{border-color:#5d946d;transform:translateY(-2px);box-shadow:0 9px 25px #0002}
+.project-banner{height:92px}.project-banner:before,.project-banner:after{opacity:.55}
+.banner-tag{border-radius:5px;background:#151719b8;border-color:#ffffff1c}
+.project-body{padding:14px}
+.project-logo{border-radius:9px}
+.project h3{font-size:14px}.author{font-size:10px;color:#a1aaa5}
+.project-desc{font-size:11px;line-height:1.65;color:#b4bdb7;min-height:37px;margin:10px 0 12px}
+.tag{background:#292e2f;color:#c0c9c3;border-radius:5px}
+.project-foot{border-color:#ffffff12;color:#a6afaa}.project-foot .dl{color:#b7efc7}
+.empty{background:#1d2022;border-color:#414947;border-radius:12px;padding:48px 18px}.empty strong{font-size:16px}
+.feature-strip{gap:12px;margin-bottom:48px}
+.feature{padding:21px;border-color:#34393b;border-radius:13px;background:#1d2022}
+.feature-icon{background:#a8e6bd18;color:#a8e6bd;border-radius:12px}
+.feature h3{font-size:14px}.feature p{color:#b2bbb5}
+.cta{padding:29px;border-color:#3c5944;border-radius:15px;background:radial-gradient(ellipse at 90% 0%,#71d89412,transparent 50%),#1d2022;margin-bottom:50px}
+.cta h2{font-size:25px}.cta p{color:#b2bbb5}
+footer{border-color:#ffffff12;color:#9ba49e}.footer-brand{color:#e1e9e3}
+.modal-backdrop{backdrop-filter:blur(10px)}.modal{background:#202426;border-color:#3b4142;border-radius:15px}.close{background:#303637}.field{color:#c1cac4}.field input,.field textarea,.field select{background:#171a1b;border-color:#3b4142;color:#f4f7f5}.field input:focus,.field textarea:focus,.field select:focus{border-color:#71d894}
+.toast{background:#27332b;border-color:#496c52;color:#e2ffe9}
+@media(min-width:1200px){.project-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1000px){.hero-grid{grid-template-columns:1.1fr .9fr}.project-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.categories{grid-template-columns:repeat(3,minmax(0,1fr))}.navlinks{gap:13px}}
+@media(max-width:720px){.nav{height:62px}.hero{padding:34px 0 20px}.hero-grid{grid-template-columns:1fr}.hero-art{min-height:270px}.core-card{width:240px}h1{font-size:46px;letter-spacing:-2.4px}.stats{margin-bottom:38px}.categories{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:38px}.project-grid{grid-template-columns:1fr}.project-banner{height:105px}.section{padding-bottom:42px}.cta{padding:22px}.navright{gap:7px}}
+
 </style>
 </head>
 <body>
@@ -52,21 +114,11 @@ footer{border-top:1px solid #ffffff10;padding:27px 0 35px;color:#838192;font-siz
 <footer><div class="shell footer-inner"><div class="footer-brand"><span class="brand-mark" style="width:26px;height:26px;border-radius:8px"><svg viewBox="0 0 24 24" fill="none" width="18"><path d="M4 4h5l3 10 3-10h5l-6.1 16h-3.8L4 4Z" fill="currentColor"/></svg></span>VoidFlame Labs <span style="font-weight:400;color:#777587">© <span id="year"></span></span></div><div class="footer-links"><a href="#discover">Discover</a><a href="#projects">Projects</a><a href="#categories">Categories</a><a href="https://github.com/alialghamdi6068/VoidFlame-Labs" target="_blank" rel="noreferrer">GitHub ↗</a><a href="mailto:alialghamdi6068@gmail.com">Contact ↗</a></div><span>Built for curious minds.</span></div></footer>
 <div class="modal-backdrop" id="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal"><div class="modal-head"><h2 id="modalTitle">Publish a project</h2><button class="close" id="closeModal" aria-label="Close">×</button></div><div id="modalContent"></div></div></div><div class="toast" id="toast" role="status"></div>
 <script>
-const projects=[
-{id:'sodium',name:'Sodium',author:'CaffeineMC',type:'Mods',icon:'◈',color:'#8fd9c7',bg:'linear-gradient(135deg,#183a39,#1b2028)',desc:'A modern rendering engine for Minecraft that improves frame rates and reduces micro-stutter.',tags:['Fabric','Performance','Client'],downloads:24000000,stars:'4.9',verified:true},
-{id:'luckperms',name:'LuckPerms',author:'Luck',type:'Plugins',icon:'✦',color:'#c5a8ff',bg:'linear-gradient(135deg,#39275b,#1e1c2a)',desc:'The permissions plugin that puts you in control. Flexible, fast, and built for modern servers.',tags:['Paper','Permissions','Server'],downloads:18000000,stars:'4.9',verified:true},
-{id:'iris',name:'Iris Shaders',author:'Iris team',type:'Shaders',icon:'◉',color:'#9dc4ff',bg:'linear-gradient(135deg,#203a65,#181c2b)',desc:'A modern shader loader designed to make beautiful visuals accessible and performant.',tags:['Fabric','Visuals','Client'],downloads:12000000,stars:'4.8',verified:true},
-{id:'cobblemon',name:'Cobblemon',author:'Cobblemon Team',type:'Modpacks',icon:'✿',color:'#ffbd89',bg:'linear-gradient(135deg,#573528,#25202a)',desc:'A community-driven creature-catching adventure built right into the world you love.',tags:['Forge','Adventure','Multiplayer'],downloads:9000000,stars:'4.8',verified:true},
-{id:'entityculling',name:'Entity Culling',author:'tr7zw',type:'Mods',icon:'⌁',color:'#f4a9df',bg:'linear-gradient(135deg,#4b2947,#211b29)',desc:'Skip rendering entities that are not visible to improve performance without changing gameplay.',tags:['Fabric','Performance','Client'],downloads:7600000,stars:'4.7',verified:true},
-{id:'viaversion',name:'ViaVersion',author:'ViaVersion Team',type:'Plugins',icon:'⇄',color:'#85f0d0',bg:'linear-gradient(135deg,#17483f,#17252a)',desc:'Allow players from newer Minecraft versions to connect to older server versions.',tags:['Paper','Compatibility','Server'],downloads:15000000,stars:'4.8',verified:true},
-{id:'fresh-animations',name:'Fresh Animations',author:'FreshLX',type:'Resource Packs',icon:'✧',color:'#ffc0df',bg:'linear-gradient(135deg,#542c48,#241c2c)',desc:'A resource pack that adds expressive, smooth animations to the creatures around you.',tags:['Resource pack','Visuals','Entities'],downloads:5300000,stars:'4.7',verified:false},
-{id:'create',name:'Create',author:'simibubi',type:'Mods',icon:'⚙',color:'#f2bf79',bg:'linear-gradient(135deg,#554126,#242027)',desc:'Build contraptions, automate production, and bring your wildest mechanical ideas to life.',tags:['Forge','Automation','Gameplay'],downloads:11000000,stars:'4.9',verified:true},
-{id:'essential',name:'Essential',author:'Spark Universe',type:'Mods',icon:'✚',color:'#b7a0ff',bg:'linear-gradient(135deg,#33285b,#1b1a28)',desc:'Play together with friends, customize your character, and share your Minecraft moments.',tags:['Fabric','Social','Multiplayer'],downloads:6700000,stars:'4.6',verified:true}
-];
+const projects=[]; // Live project cards are populated only from approved Supabase records.
 let activeFilter='All',query='';
 const fmt=n=>n>=1e6?(n/1e6).toFixed(n%1e6===0?0:1)+'M':n>=1e3?(n/1e3).toFixed(0)+'K':String(n);
 const grid=document.getElementById('projectGrid');
-function render(){let list=projects.filter(p=>(activeFilter==='All'||p.type===activeFilter)&&[p.name,p.author,p.type,p.desc,...p.tags].join(' ').toLowerCase().includes(query.toLowerCase()));const sort=document.getElementById('sortSelect').value;if(sort==='name')list.sort((a,b)=>a.name.localeCompare(b.name));if(sort==='downloads')list.sort((a,b)=>b.downloads-a.downloads);if(!list.length){grid.innerHTML='<div class="empty"><strong>No projects found</strong>Try another search or category.</div>';return}grid.innerHTML=list.map(p=>'<article class="project" tabindex="0" role="button" data-project="'+p.id+'" aria-label="View '+p.name+'"><div class="project-banner" style="background:'+p.bg+'"><span class="banner-tag">'+p.type+'</span><span class="banner-glyph" style="color:'+p.color+'">'+p.icon+'</span></div><div class="project-body"><div class="project-title-row"><div class="project-logo" style="background:'+p.color+'20;color:'+p.color+'">'+p.icon+'</div><div style="min-width:0"><h3>'+p.name+'</h3><div class="author">by '+p.author+' '+(p.verified?'<span class="verified">✓</span>':'')+'</div></div></div><p class="project-desc">'+p.desc+'</p><div class="tags">'+p.tags.map(t=>'<span class="tag">'+t+'</span>').join('')+'</div><div class="project-foot"><span class="dl">↓ '+fmt(p.downloads)+'</span><span>★ '+p.stars+'</span><span>↗ Details</span></div></div></article>').join('')}
+function render(){let list=projects.filter(p=>(activeFilter==='All'||p.type===activeFilter)&&[p.name,p.author,p.type,p.desc,...p.tags].join(' ').toLowerCase().includes(query.toLowerCase()));const sort=document.getElementById('sortSelect').value;if(sort==='name')list.sort((a,b)=>a.name.localeCompare(b.name));if(sort==='downloads')list.sort((a,b)=>b.downloads-a.downloads);if(!list.length){grid.innerHTML='<div class="empty"><strong>'+(query?'No matching projects':'No published projects yet')+'</strong>'+(query?'Try another search or category.':'New projects will appear here after they are reviewed and approved.')+'</div>';return}grid.innerHTML=list.map(p=>'<article class="project" tabindex="0" role="button" data-project="'+p.id+'" aria-label="View '+p.name+'"><div class="project-banner" style="background:'+p.bg+'"><span class="banner-tag">'+p.type+'</span><span class="banner-glyph" style="color:'+p.color+'">'+p.icon+'</span></div><div class="project-body"><div class="project-title-row"><div class="project-logo" style="background:'+p.color+'20;color:'+p.color+'">'+p.icon+'</div><div style="min-width:0"><h3>'+p.name+'</h3><div class="author">by '+p.author+' '+(p.verified?'<span class="verified">✓</span>':'')+'</div></div></div><p class="project-desc">'+p.desc+'</p><div class="tags">'+p.tags.map(t=>'<span class="tag">'+t+'</span>').join('')+'</div><div class="project-foot"><span class="dl">↓ '+fmt(p.downloads)+'</span><span>★ '+p.stars+'</span><span>↗ Details</span></div></div></article>').join('')}
 function setFilter(f){activeFilter=f;document.querySelectorAll('[data-filter]').forEach(b=>b.classList.toggle('selected',b.dataset.filter===f));render();document.getElementById('projects').scrollIntoView({behavior:'smooth',block:'start'})}
 function setQuery(q){query=q;document.getElementById('mainSearch').value=q;document.getElementById('topSearch').value=q;render();document.getElementById('projects').scrollIntoView({behavior:'smooth',block:'start'})}
 document.querySelectorAll('[data-filter]').forEach(b=>b.addEventListener('click',()=>setFilter(b.dataset.filter)));
@@ -87,7 +139,7 @@ function publishModal(){openModal('Publish a project','<p class="modal-note">Sha
 document.getElementById('publishBtn').addEventListener('click',publishModal);document.getElementById('ctaPublish').addEventListener('click',publishModal);
 document.getElementById('signinBtn').addEventListener('click',()=>openModal('Welcome to VoidFlame Labs','<p class="modal-note">Accounts will let you save projects, follow creators, and manage releases.</p><label class="field">Email<input type="email" placeholder="you@example.com"></label><label class="field">Password<input type="password" placeholder="Your password"></label><button class="btn btn-primary" style="width:100%" id="signinContinue">Continue</button><p class="modal-note" style="margin:12px 0 0">Authentication is a future integration; this preview does not collect or send credentials.</p>'));
 document.getElementById('mobileSearch').addEventListener('click',()=>openModal('Search projects','<label class="field">Search<input id="mobileSearchInput" placeholder="Mods, plugins, creators..."></label><button class="btn btn-primary" id="mobileSearchGo" style="width:100%">Search</button>'));
-document.addEventListener('click',e=>{const card=e.target.closest('[data-project]');if(!card)return;const p=projects.find(x=>x.id===card.dataset.project);if(!p)return;openModal(p.name,'<div style="display:flex;gap:14px;align-items:center;margin-bottom:18px"><div class="project-logo" style="width:52px;height:52px;font-size:22px;background:'+p.color+'20;color:'+p.color+'">'+p.icon+'</div><div><div style="color:#bba7ff;font-size:11px;margin-bottom:3px">'+p.type+'</div><div style="font-size:12px;color:#a7a3b5">by '+p.author+'</div></div></div><p style="font-size:13px;line-height:1.8;color:#c0bdcb">'+p.desc+'</p><div class="tags">'+p.tags.map(t=>'<span class="tag">'+t+'</span>').join('')+'</div><div class="project-foot" style="margin-bottom:20px"><span>↓ '+fmt(p.downloads)+' downloads</span><span>★ '+p.stars+'</span></div><p class="modal-note">Project detail preview. Live version files, compatibility data, and secure downloads will be connected when the platform backend is implemented.</p><button class="btn btn-primary" id="demoDownload" style="width:100%">Download <span aria-hidden="true">↓</span></button>');document.getElementById('demoDownload').addEventListener('click',()=>toast('Downloads are not connected in this UI preview yet.'))});
+document.addEventListener('click',e=>{const card=e.target.closest('[data-project]');if(!card)return;const p=projects.find(x=>x.id===card.dataset.project);if(!p||p.remoteId)return;openModal(p.name,'<div style="display:flex;gap:14px;align-items:center;margin-bottom:18px"><div class="project-logo" style="width:52px;height:52px;font-size:22px;background:'+p.color+'20;color:'+p.color+'">'+p.icon+'</div><div><div style="color:#bba7ff;font-size:11px;margin-bottom:3px">'+p.type+'</div><div style="font-size:12px;color:#a7a3b5">by '+p.author+'</div></div></div><p style="font-size:13px;line-height:1.8;color:#c0bdcb">'+p.desc+'</p><div class="tags">'+p.tags.map(t=>'<span class="tag">'+t+'</span>').join('')+'</div><div class="project-foot" style="margin-bottom:20px"><span>↓ '+fmt(p.downloads)+' downloads</span><span>★ '+p.stars+'</span></div><p class="modal-note">Project detail preview. Live version files, compatibility data, and secure downloads will be connected when the platform backend is implemented.</p><button class="btn btn-primary" id="demoDownload" style="width:100%">Download <span aria-hidden="true">↓</span></button>');document.getElementById('demoDownload').addEventListener('click',()=>toast('Downloads are not connected in this UI preview yet.'))});
 document.addEventListener('click',e=>{if(e.target.id==='mobileSearchGo'){const q=document.getElementById('mobileSearchInput').value;closeModal();setQuery(q)}});
 document.getElementById('year').textContent=new Date().getFullYear();render();
 </script>
