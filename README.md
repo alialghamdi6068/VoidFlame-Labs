@@ -29,9 +29,9 @@ The bootstrap recognizes `alialghamdi6068@gmail.com` as the owner. The account m
 ### Frontend configuration
 
 1. Copy `config.example.js` to `config.js` for local testing and enter the Supabase project URL and public anon/publishable key.
-2. For GitHub Pages, add Actions variables named `SUPABASE_URL` and `SUPABASE_ANON_KEY` under **Settings → Secrets and variables → Actions → Variables**.
-3. Enable Email, Google, and GitHub providers in Supabase Auth as needed. Configure OAuth callback URLs and allowed redirect URLs using the values Supabase displays.
-4. Set GitHub Pages to use GitHub Actions and check the deployment workflow.
+2. Set GitHub Pages to use **GitHub Actions** as its deployment source. The site can deploy in preview mode before Supabase is configured.
+3. To enable accounts and live backend features, add Actions variables named `SUPABASE_URL` and `SUPABASE_ANON_KEY` under **Settings → Secrets and variables → Actions → Variables**.
+4. Enable Email, Google, and GitHub providers in Supabase Auth as needed. Configure OAuth callback URLs and allowed redirect URLs using the values Supabase displays.
 
 Only the public anon/publishable key belongs in frontend code. **Never place the Supabase service-role/secret key in `config.js`, browser JavaScript, or frontend build variables.**
 
