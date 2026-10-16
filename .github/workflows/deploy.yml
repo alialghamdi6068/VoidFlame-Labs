@@ -22,36 +22,32 @@ jobs:
         uses: actions/checkout@v4
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
-      - name: Generate browser configuration
-        env:
-          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+      - name: Validate GitHub catalogue
         run: |
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "::warning::Supabase Actions variables are not configured. The public site will deploy in preview mode; sign-in, publishing, live projects, and downloads will remain disabled until both variables are added."
-          fi
-          node <<'NODE'
-          const fs = require('node:fs');
-          const config = {
-            supabaseUrl: process.env.SUPABASE_URL || '',
-            supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
-            ownerEmail: 'alialghamdi6068@gmail.com'
-          };
-          fs.writeFileSync('config.js', 'window.VOIDFLAME_CONFIG = ' + JSON.stringify(config) + ';\n');
-          NODE
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path("data/projects.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          projects = data if isinstance(data, list) else data.get("projects")
+          if not isinstance(projects, list):
+              raise SystemExit("data/projects.json must contain a projects array")
+          required = ("name", "category", "summary")
+          for index, project in enumerate(projects):
+              if not isinstance(project, dict) or any(not isinstance(project.get(key), str) or not project[key].strip() for key in required):
+                  raise SystemExit(f"Project entry {index} must include name, category, and summary")
+          print(f"Catalogue valid: {len(projects)} approved project(s)")
+          PY
       - name: Check JavaScript syntax
         run: |
-          node --check auth.js
-          node --check staff-tools.js
-          node --check account-auth.js
           python3 - <<'PY'
           import pathlib, re, subprocess
-          html = pathlib.Path("index.html").read_text()
+          html = pathlib.Path("index.html").read_text(encoding="utf-8")
           scripts = re.findall(r"<script(?:\s[^>]*)?>([\s\S]*?)</script>", html, re.I)
           for index, script in enumerate(scripts):
               if script.strip():
                   path = pathlib.Path(f"/tmp/inline-{index}.js")
-                  path.write_text(script)
+                  path.write_text(script, encoding="utf-8")
                   subprocess.run(["node", "--check", str(path)], check=True)
           PY
       - name: Upload site artifact
