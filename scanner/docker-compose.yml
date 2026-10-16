@@ -10,7 +10,7 @@ services:
       start_period: 180s
     volumes:
       - clamav-signatures:/var/lib/clamav
-    networks: [scanner-internal]
+    networks: [scanner-internal, scanner-egress]
 
   scanner:
     build: .
