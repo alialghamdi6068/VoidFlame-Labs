@@ -34,7 +34,7 @@ jobs:
           python3 - <<'PY'
           import pathlib, re, subprocess
           html = pathlib.Path("index.html").read_text()
-          scripts = re.findall(r"<script(?:\\s[^>]*)?>([\\s\\S]*?)</script>", html, re.I)
+          scripts = re.findall(r"<script(?:\s[^>]*)?>([\s\S]*?)</script>", html, re.I)
           for index, script in enumerate(scripts):
               if script.strip():
                   path = pathlib.Path(f"/tmp/inline-{index}.js")
