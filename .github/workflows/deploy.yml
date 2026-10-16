@@ -22,6 +22,13 @@ jobs:
         uses: actions/checkout@v4
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
+      - name: Require Supabase frontend settings
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+        run: |
+          test -n "$SUPABASE_URL" || (echo "Missing Actions variable SUPABASE_URL" && exit 1)
+          test -n "$SUPABASE_ANON_KEY" || (echo "Missing Actions variable SUPABASE_ANON_KEY" && exit 1)
       - name: Generate browser configuration
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
