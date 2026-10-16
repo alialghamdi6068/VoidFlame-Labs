@@ -98,5 +98,5 @@
     };
   });
   replaceClick("signinBtn",auth);replaceClick("publishBtn",publish);replaceClick("ctaPublish",publish);
-  if(db){db.auth.onAuthStateChange(()=>setTimeout(async()=>{await refresh();await loadApprovedProjects();},0));refresh().then(loadApprovedProjects);}
+  if(db){$("signinBtn")?.remove();db.auth.onAuthStateChange(()=>setTimeout(async()=>{await refresh();await loadApprovedProjects();},0));refresh().then(loadApprovedProjects);}
 })();
