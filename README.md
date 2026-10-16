@@ -5,10 +5,10 @@ A modern Minecraft content platform for discovering and publishing mods, plugins
 ## Features in the repository
 
 - Responsive discovery UI with categories, search, sorting, and project details.
-- Google and GitHub OAuth sign-in via Supabase Auth.
+- Account registration and sign-in with email/password, Google, or GitHub via Supabase Auth.
 - Permission-gated project publishing: users cannot upload unless the owner or a manager grants publishing access.
-- Manager workspace for granting/revoking publishing permissions and reviewing submissions.
-- Owner-only manager appointment and removal.
+- Separate staff role management, security review queue, and content review queue.
+- Owner-only manager appointment/removal; manager-assigned Developer, Security Reviewer, and Content Moderator roles.
 - Project and release moderation with private file storage and signed downloads for approved releases.
 - Supabase database policies and server-side RPCs in `supabase/`.
 
