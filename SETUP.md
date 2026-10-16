@@ -12,6 +12,7 @@ This guide covers the remaining account-owned setup. The repository code cannot 
    - `supabase/003-bootstrap-and-moderation.sql`
    - `supabase/004-manager-demotion.sql`
    - `supabase/005-specialist-permissions.sql`
+   - `supabase/006-automated-security-scanning.sql`
 4. Open **Project Settings → API** and copy the Project URL and public anon/publishable key. Do not copy the service-role/secret key into the site.
 
 ## 2. Configure account registration and Google sign-in
@@ -59,28 +60,47 @@ These two frontend values are intended to be public. Do not add a Supabase servi
 2. Confirm that the account profile has the `owner` role. The SQL trigger/backfill assigns this role to that exact email.
 3. Sign in with a separate test account. It should not be able to publish until the owner/manager grants permission.
 4. From the owner account, open **Manager**, enter the creator's email, and grant publishing access.
-5. Upload a test .jar/.zip, approve it from the Manager workspace, then test the approved download with the creator and a signed-out visitor.
+5. Upload a test .jar/.zip, confirm it is held as `pending_scan`, then verify the scanner verdict before content approval.
 
 If the owner account signs in before running the SQL bootstrap, run `supabase/003-bootstrap-and-moderation.sql` after the other two files. If the owner email is already in use by a different Supabase auth identity, resolve that account conflict before granting owner access.
-
-## Current boundaries
-
-- The frontend restricts uploads to .jar/.zip up to 100 MB. This is not malware scanning; do not treat it as proof that a plugin is safe.
-- Before opening public submissions broadly, add server-side archive inspection, abuse reporting, rate limits, and a backup/restore procedure.
-- The application code does not provide real OAuth credentials or create the Supabase project. Those steps require access to your provider accounts.
-
 
 ## 7. Permission roles and review workflow
 
 The `005-specialist-permissions.sql` migration adds separate roles:
 - **Owner** — full platform authority.
 - **Manager** — manages staff permissions and coordinates moderation; only the owner can appoint or remove managers.
-- **Security Reviewer** — reviews uploaded release files and records a clean, flagged, or rejected verdict.
+- **Security Reviewer** — reviews flagged releases and records a clean, flagged, or rejected verdict.
 - **Content Moderator** — reviews project descriptions, categories, and metadata.
 - **Developer / Publisher** — can submit plugins, mods, modpacks, shaders, resource packs, and other supported project types.
 - **Member** — browsing account without publishing rights by default.
 - **Suspended** — publishing disabled; enforce any broader sign-in restrictions separately if desired.
 
-A release starts with `security_status = 'pending_scan'`. It must be marked `clean` before a content moderator can approve the project. Flagged or rejected files cannot be approved through the normal moderation RPC. Security review currently records staff verdicts; it is **not an antivirus scanner**. Do not call a file safe based only on its extension or a human review.
+A release starts with `security_status = 'pending_scan'`. The scanner processes it, and a project cannot be approved unless every release has `security_status = 'clean'`. Flagged or rejected files cannot be approved through the normal moderation RPC.
 
-Managers can assign specialist roles from the `set_staff_role` database function. The current Manager page may need a matching UI update to expose the new role-assignment and review queues; the migration provides the database permissions and server-side checks, not an automatic malware-analysis service.
+## 8. Start the automated malware scanner
+
+The scanner is a separate server-side Docker service. It is **not** hosted by GitHub Pages and must be deployed on a machine/container host that can reach Supabase. It must never run inside a browser.
+
+1. Install Docker Engine and the Docker Compose plugin on a trusted server.
+2. In the repository checkout, enter the `scanner/` directory.
+3. Copy `.env.example` to `.env`.
+4. Fill in `SUPABASE_URL` and the **server-only** Supabase service-role key in `.env`. Get the key from Supabase Project Settings → API. This key bypasses RLS; keep it out of Git, frontend files, screenshots, and chat.
+5. Start it with `docker compose up -d --build`.
+6. Watch startup and scanning with `docker compose logs -f scanner clamav`. ClamAV may take several minutes on first boot to download signatures.
+7. Keep Docker images, ClamAV signatures, and the host patched. Restrict access to the server and its logs.
+
+The worker polls the private `project_versions` table for `pending_scan`, downloads each file from the private `project-files` bucket, scans in memory, and records its verdict/report. It never executes JARs or extracts archive members to disk. If ClamAV is unavailable or a required scan errors, the item remains `pending_scan` (fail closed). It also checks archive paths/size ratios, SHA-256, suspicious static indicators, and optional YARA rules.
+
+### Optional AI triage
+
+AI is **advisory only**. The optional OpenAI-compatible API receives bounded printable strings and scan indicators—not the full binary. It can add a suspicious flag, but it can never mark a file clean. Configure `AI_ENABLED=true`, `AI_API_KEY`, and `AI_MODEL` in `scanner/.env` only if you accept sending those extracted snippets to the configured provider. Keep it disabled otherwise. Do not send uploaded source/binaries to an AI provider without a privacy review.
+
+### Important limitations
+
+- No malware scanner can guarantee a file is safe. False negatives and false positives are possible.
+- ClamAV signatures, archive checks, static heuristics, and optional AI triage are layers, not a guarantee. Add reviewed YARA rules to `scanner/rules/` as needed.
+- The current scanner is a single worker; production scale requires monitoring, alerting, retention controls, and tested recovery.
+- Do not mark files clean manually without evidence. Review flagged results in the Security Queue.
+- The scanner service-role key is a highly privileged secret. Never place it in `config.js`, `index.html`, GitHub Pages variables used by frontend builds, or client JavaScript.
+- This repository's app/OAuth/Supabase setup still requires account-owner configuration and end-to-end testing.
+
