@@ -40,18 +40,28 @@
     if(!name||summary.length<10||!version||!file){toast("Fill in the required fields and select a file.");return;}
     if(!/\.(jar|zip)$/i.test(file.name)||file.size>104857600){toast("Only .jar/.zip files up to 100 MB are accepted.");return;}
     b.disabled=true;b.textContent="Uploading…";
+    let projectId = null, uploadedPath = null, projectCreated = false;
     try {
       const versions=$("upVersions").value.split(",").map(s=>s.trim()).filter(Boolean), loader=$("upLoader").value.trim(), id=crypto.randomUUID();
+      projectId = id;
       const slug=(name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,50)||"project")+"-"+id.slice(0,8);
       const {error:pe}=await db.from("projects").insert({id,slug,name,summary,description:summary,category:$("upCategory").value,game:"Minecraft",loader,supported_versions:versions,status:"pending",owner_id:user.id});
       if(pe)throw pe;
+      projectCreated = true;
       const fileName=file.name.replace(/[^a-zA-Z0-9._-]/g,"_"), path=user.id+"/"+id+"/"+fileName;
+      uploadedPath = path;
       const {error:fe}=await db.storage.from("project-files").upload(path,file,{contentType:file.name.toLowerCase().endsWith(".jar")?"application/java-archive":"application/zip"});
-      if(fe){await db.from("projects").delete().eq("id",id);throw fe;}
-      const {error:ve}=await db.from("project_versions").insert({project_id:id,version,game_versions:versions,loaders:loader?[loader]:[],file_path:path,file_name:file.name,file_size:file.size,changelog:$("upChangelog").value,created_by:user.id,status:"pending"});
+      if(fe)throw fe;
+      const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+      const sha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2,"0")).join("");
+      const {error:ve}=await db.from("project_versions").insert({project_id:id,version,game_versions:versions,loaders:loader?[loader]:[],file_path:path,file_name:file.name,file_size:file.size,sha256,changelog:$("upChangelog").value,created_by:user.id,status:"pending"});
       if(ve)throw ve;
       close();toast("Upload complete. Waiting for manager review.");
-    } catch(e){toast("Upload failed: "+(e.message||"Unknown error"));} finally {b.disabled=false;b.textContent="Upload for review";}
+    } catch(e){
+      if(uploadedPath) await db.storage.from("project-files").remove([uploadedPath]).catch(()=>{});
+      if(projectCreated && projectId) await db.from("projects").delete().eq("id",projectId).eq("status","pending");
+      toast("Upload failed: "+(e.message||"Unknown error"));
+    } finally {b.disabled=false;b.textContent="Upload for review";}
   }
   async function manager() {
     if(!["owner","manager"].includes(profile?.role)){toast("Manager permission required.");return;}
