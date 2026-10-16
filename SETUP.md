@@ -10,6 +10,7 @@ This guide covers the remaining account-owned setup. The repository code cannot 
    - `supabase/schema.sql`
    - `supabase/002-security-hardening.sql`
    - `supabase/003-bootstrap-and-moderation.sql`
+   - `supabase/004-manager-demotion.sql`
 4. Open **Project Settings → API** and copy the Project URL and public anon/publishable key. Do not copy the service-role/secret key into the site.
 
 ## 2. Configure Google sign-in
