@@ -20,10 +20,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - name: Validate GitHub catalogue
         run: |
           python3 - <<'PY'
@@ -52,6 +48,8 @@ jobs:
                   path.write_text(script, encoding="utf-8")
                   subprocess.run(["node", "--check", str(path)], check=True)
           PY
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
         with:
