@@ -22,6 +22,12 @@ jobs:
         uses: actions/checkout@v4
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
+      - name: Generate browser configuration
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+        run: |
+          printf 'window.VOIDFLAME_CONFIG = { supabaseUrl: "%s", supabaseAnonKey: "%s", ownerEmail: "alialghamdi6068@gmail.com" };\n' "$SUPABASE_URL" "$SUPABASE_ANON_KEY" > config.js
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
         with:
