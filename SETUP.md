@@ -45,14 +45,13 @@ Use the exact URL shown after GitHub Pages deploys; do not guess it.
 
 ## 5. Configure GitHub Pages deployment
 
-1. In the repository, open **Settings → Secrets and variables → Actions → Variables**.
-2. Add these repository variables:
+1. In **Settings → Pages**, select **GitHub Actions** as the build/deployment source. The site will deploy in preview mode even before Supabase is ready.
+2. When you have the Supabase values, open **Settings → Secrets and variables → Actions → Variables** and add:
    - `SUPABASE_URL` — your Supabase Project URL.
    - `SUPABASE_ANON_KEY` — your public anon/publishable key.
-3. In **Settings → Pages**, select **GitHub Actions** as the build/deployment source.
-4. Open **Actions** and inspect the latest **Deploy VoidFlame Labs** run. It will now fail clearly if either variable is missing.
+3. Open **Actions** and confirm the latest **Deploy VoidFlame Labs** run succeeds. If either value is missing, the workflow warns and deploys a preview instead of failing.
 
-These two frontend values are intended to be public. Do not add a Supabase service-role key.
+These two frontend values are intended to be public. Do not add a Supabase service-role key. In preview mode, sign-in, publishing, live projects, and downloads remain disabled until both variables are configured.
 
 ## 6. Activate owner access and test publishing
 
