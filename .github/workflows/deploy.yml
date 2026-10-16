@@ -22,26 +22,32 @@ jobs:
         uses: actions/checkout@v4
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
-      - name: Require Supabase frontend settings
-        env:
-          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
-        run: |
-          test -n "$SUPABASE_URL" || (echo "Missing Actions variable SUPABASE_URL" && exit 1)
-          test -n "$SUPABASE_ANON_KEY" || (echo "Missing Actions variable SUPABASE_ANON_KEY" && exit 1)
       - name: Generate browser configuration
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
         run: |
-          printf 'window.VOIDFLAME_CONFIG = { supabaseUrl: "%s", supabaseAnonKey: "%s", ownerEmail: "alialghamdi6068@gmail.com" };\n' "$SUPABASE_URL" "$SUPABASE_ANON_KEY" > config.js
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::warning::Supabase Actions variables are not configured. The public site will deploy in preview mode; sign-in, publishing, live projects, and downloads will remain disabled until both variables are added."
+          fi
+          node <<'NODE'
+          const fs = require('node:fs');
+          const config = {
+            supabaseUrl: process.env.SUPABASE_URL || '',
+            supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
+            ownerEmail: 'alialghamdi6068@gmail.com'
+          };
+          fs.writeFileSync('config.js', 'window.VOIDFLAME_CONFIG = ' + JSON.stringify(config) + ';\\n');
+          NODE
       - name: Check JavaScript syntax
         run: |
           node --check auth.js
+          node --check staff-tools.js
+          node --check account-auth.js
           python3 - <<'PY'
           import pathlib, re, subprocess
           html = pathlib.Path("index.html").read_text()
-          scripts = re.findall(r"<script(?:\s[^>]*)?>([\s\S]*?)</script>", html, re.I)
+          scripts = re.findall(r"<script(?:\\s[^>]*)?>([\\s\\S]*?)</script>", html, re.I)
           for index, script in enumerate(scripts):
               if script.strip():
                   path = pathlib.Path(f"/tmp/inline-{index}.js")
