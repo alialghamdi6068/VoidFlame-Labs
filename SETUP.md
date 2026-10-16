@@ -14,7 +14,11 @@ This guide covers the remaining account-owned setup. The repository code cannot 
    - `supabase/005-specialist-permissions.sql`
 4. Open **Project Settings → API** and copy the Project URL and public anon/publishable key. Do not copy the service-role/secret key into the site.
 
-## 2. Configure Google sign-in
+## 2. Configure account registration and Google sign-in
+
+Email/password registration uses Supabase Auth. In **Authentication → Providers**, ensure the Email provider is enabled. Configure email confirmation and SMTP according to whether you want new accounts to confirm their email before signing in. The site also supports Google and GitHub OAuth.
+
+### Google OAuth
 
 1. In Google Cloud Console, create/select a project and configure the OAuth consent screen.
 2. Create an OAuth client of type **Web application**.
