@@ -5,6 +5,7 @@ workers_dev = true
 
 [vars]
 SITE_URL = "https://alialghamdi6068.github.io/VoidFlame-Labs"
+API_URL = "https://REPLACE_WITH_WORKER_HOST"
 
 [[d1_databases]]
 binding = "DB"
