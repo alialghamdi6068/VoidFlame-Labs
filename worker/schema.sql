@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS versions (
   channel TEXT NOT NULL DEFAULT 'release' CHECK (channel IN ('release','beta','alpha')),
   file_key TEXT,
   file_name TEXT,
+  release_url TEXT,
   file_size INTEGER NOT NULL DEFAULT 0,
   downloads INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
