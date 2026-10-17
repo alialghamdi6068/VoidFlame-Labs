@@ -62,7 +62,9 @@ export default {
         redirect.searchParams.set("redirect_uri",new URL("/api/auth/callback",env.SITE_URL).toString());
         redirect.searchParams.set("scope","read:user");
         redirect.searchParams.set("state",state);
-        return Response.redirect(redirect.toString(),302,{headers:{"set-cookie":cookie("vf_oauth_state",state+"."+sig).replace("Max-Age=2592000","Max-Age=600")}});
+        const response = new Response(null,{status:302,headers:{location:redirect.toString()}});
+        response.headers.append("Set-Cookie",cookie("vf_oauth_state",state+"."+sig).replace("Max-Age=2592000","Max-Age=600"));
+        return response;
       }
       if (url.pathname === "/api/auth/callback" && request.method === "GET") {
         const given = url.searchParams.get("state") || "";
@@ -85,7 +87,12 @@ export default {
         const sid = id();
         await env.DB.prepare("INSERT INTO sessions(id,user_id,expires_at) VALUES(?,?,datetime('now','+30 days'))").bind(sid,user.id).run();
         const signed = sid+"."+await sign(sid,env.SESSION_SECRET);
-        return Response.redirect(new URL("/?signed_in=1",env.SITE_URL).toString(),302,{headers:{"set-cookie":cookie("vf_session",signed)+"; "+""+"","set-cookie":cookie("vf_session",signed)+"\n"+clearCookie.replace("vf_session=","vf_oauth_state=")}});
+        const destination = new URL(env.SITE_URL);
+        destination.searchParams.set("signed_in","1");
+        const response = new Response(null,{status:302,headers:{location:destination.toString()}});
+        response.headers.append("Set-Cookie",cookie("vf_session",signed));
+        response.headers.append("Set-Cookie",clearCookie.replace("vf_session=","vf_oauth_state="));
+        return response;
       }
       if (url.pathname === "/api/auth/logout" && request.method === "POST") {
         const user = await sessionUser(request,env);
