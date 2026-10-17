@@ -91,7 +91,7 @@ export default {
         const user = await sessionUser(request,env);
         const token = getCookie(request,"vf_session");
         if (token) await env.DB.prepare("DELETE FROM sessions WHERE id=?").bind(token.split(".")[0]).run();
-        return json({ok:true},{headers:{"set-cookie":clearCookie}});
+        return new Response(JSON.stringify({ok:true}),{headers:{"content-type":"application/json","cache-control":"no-store","set-cookie":clearCookie}});
       }
       if (url.pathname === "/api/me" && request.method === "GET") return json({user:await sessionUser(request,env)});
       if (url.pathname === "/api/projects" && request.method === "GET") {
