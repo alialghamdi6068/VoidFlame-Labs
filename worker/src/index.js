@@ -47,8 +47,18 @@ async function githubFetch(url, token) {
 }
 export default {
   async fetch(request, env) {
+    const response = await this.handle(request, env);
+    const origin = request.headers.get("Origin");
+    if (origin && origin === new URL(env.SITE_URL).origin) {
+      response.headers.set("access-control-allow-origin", origin);
+      response.headers.set("access-control-allow-credentials", "true");
+      response.headers.set("vary", "Origin");
+    }
+    return response;
+  },
+  async handle(request, env) {
     const url = new URL(request.url);
-    if (request.method === "OPTIONS") return new Response(null,{status:204,headers:{"access-control-allow-origin":env.SITE_URL,"access-control-allow-methods":"GET,POST,PATCH,DELETE,OPTIONS","access-control-allow-headers":"Content-Type","access-control-allow-credentials":"true","vary":"Origin"}});
+    if (request.method === "OPTIONS") return new Response(null,{status:204,headers:{"access-control-allow-origin":new URL(env.SITE_URL).origin,"access-control-allow-methods":"GET,POST,PATCH,DELETE,OPTIONS","access-control-allow-headers":"Content-Type","access-control-allow-credentials":"true","vary":"Origin"}});
     if (!url.pathname.startsWith("/api/")) return err("Not found",404);
     if (!requireSameOrigin(request, env)) return err("Origin not allowed",403);
     try {
@@ -59,7 +69,7 @@ export default {
         const sig = await sign(state, env.SESSION_SECRET);
         const redirect = new URL("https://github.com/login/oauth/authorize");
         redirect.searchParams.set("client_id",env.GITHUB_CLIENT_ID);
-        redirect.searchParams.set("redirect_uri",new URL("/api/auth/callback",env.SITE_URL).toString());
+        redirect.searchParams.set("redirect_uri",new URL("/api/auth/callback",env.API_URL || env.SITE_URL).toString());
         redirect.searchParams.set("scope","read:user");
         redirect.searchParams.set("state",state);
         const response = new Response(null,{status:302,headers:{location:redirect.toString()}});
