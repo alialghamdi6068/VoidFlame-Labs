@@ -1,0 +1,17 @@
+name = "voidflame-labs-api"
+main = "src/index.js"
+compatibility_date = "2026-10-17"
+workers_dev = true
+
+[vars]
+SITE_URL = "https://alialghamdi6068.github.io/VoidFlame-Labs"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "voidflame-labs"
+database_id = "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "voidflame-labs-files"
