@@ -91,3 +91,11 @@ CREATE INDEX IF NOT EXISTS idx_versions_project_created ON versions(project_id, 
 CREATE INDEX IF NOT EXISTS idx_comments_project_created ON comments(project_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_reports_status_created ON reports(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_analytics_project_created ON analytics_events(project_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_expires ON sessions(user_id, expires_at);
