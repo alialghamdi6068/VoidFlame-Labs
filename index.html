@@ -149,7 +149,7 @@ async function loadGitHubCatalogue(){
       const color=/^#[0-9a-f]{3,8}$/i.test(item.color||'')?item.color:'#a8e6bd';
       const releaseUrl=typeof item.releaseUrl==='string'&&/^https:\/\/github\.com\//i.test(item.releaseUrl)?item.releaseUrl:'';
       const sourceUrl=typeof item.sourceUrl==='string'&&/^https:\/\/github\.com\//i.test(item.sourceUrl)?item.sourceUrl:'';
-      projects.push({id:'gh-'+String(item.slug||item.id||name).replace(/[^a-zA-Z0-9_-]/g,''),name,author,type:category,icon:htmlSafe(item.icon||'✦'),color,bg:'linear-gradient(135deg,#29372d,#202426)',desc:htmlSafe(item.summary||''),details:htmlSafe(item.description||item.summary||''),tags:(Array.isArray(item.supportedVersions)?item.supportedVersions:[]).slice(0,4).map(htmlSafe),downloads:Number.isFinite(Number(item.downloads))?Math.max(0,Number(item.downloads)):0,stars:'—',verified:false,releaseUrl,sourceUrl,version:htmlSafe(item.version||'')});
+      projects.push({id:'gh-'+String(item.slug||item.id||name).replace(/[^a-zA-Z0-9_-]/g,''),slug:String(item.slug||item.id||name),name,author,type:category,icon:htmlSafe(item.icon||'✦'),color,bg:'linear-gradient(135deg,#29372d,#202426)',desc:htmlSafe(item.summary||''),details:htmlSafe(item.description||item.summary||''),tags:(Array.isArray(item.supportedVersions)?item.supportedVersions:[]).slice(0,4).map(htmlSafe),downloads:Number.isFinite(Number(item.downloads))?Math.max(0,Number(item.downloads)):0,stars:'—',verified:false,releaseUrl,sourceUrl,version:htmlSafe(item.version||'')});
     }
     render();
   }catch(error){
@@ -162,6 +162,7 @@ document.getElementById('signinBtn').addEventListener('click',()=>openModal('Git
 document.addEventListener('click',event=>{
   const card=event.target.closest('[data-project]');if(!card)return;
   const project=projects.find(item=>item.id===card.dataset.project);if(!project)return;
+  window.location.href='project.html?slug='+encodeURIComponent(project.slug);return;
   const links=(project.releaseUrl?'<a class="btn btn-primary" style="display:block;text-align:center;margin:10px 0" href="'+project.releaseUrl+'" target="_blank" rel="noopener noreferrer">Download release ↗</a>':'')+(project.sourceUrl?'<a class="btn" style="display:block;text-align:center" href="'+project.sourceUrl+'" target="_blank" rel="noopener noreferrer">Source code ↗</a>':'');
   openModal(project.name,'<p class="modal-note">'+project.type+' · by '+project.author+'</p><p style="font-size:13px;line-height:1.8;color:#c0c9c3;white-space:pre-wrap">'+(project.details||project.desc)+'</p>'+(project.version?'<p class="modal-note">Latest version: '+project.version+'</p>':'')+(project.tags.length?'<p class="modal-note">Compatibility: '+project.tags.join(' · ')+'</p>':'')+'<p class="modal-note">'+fmt(project.downloads)+' downloads</p>'+links);
 });
