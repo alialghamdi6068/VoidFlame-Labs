@@ -131,7 +131,7 @@ export default {
         const project=await env.DB.prepare("SELECT p.*,u.username AS author,u.avatar_url AS author_avatar FROM projects p JOIN users u ON u.id=p.owner_id WHERE p.slug=? AND p.status='approved'").bind(projectMatch[1]).first();
         if(!project)return err("Project not found",404);
         await env.DB.prepare("INSERT INTO analytics_events(id,project_id,event_type) VALUES(?,?,'view')").bind(id(),project.id).run();
-        const versions=await env.DB.prepare("SELECT id,version_number,changelog,game_versions,loaders,channel,file_name,file_size,downloads,created_at FROM versions WHERE project_id=? ORDER BY created_at DESC").bind(project.id).all();
+        const versions=await env.DB.prepare("SELECT id,version_number,changelog,game_versions,loaders,channel,file_name,file_size,release_url,downloads,created_at FROM versions WHERE project_id=? ORDER BY created_at DESC").bind(project.id).all();
         const comments=await env.DB.prepare("SELECT c.id,c.body,c.created_at,u.username,u.avatar_url FROM comments c JOIN users u ON u.id=c.user_id WHERE c.project_id=? AND c.status='visible' ORDER BY c.created_at DESC LIMIT 100").bind(project.id).all();
         return json({project,versions:versions.results||[],comments:comments.results||[]});
       }
@@ -177,6 +177,48 @@ export default {
         const projectId=id();
         await env.DB.prepare("INSERT INTO projects(id,slug,owner_id,name,summary,description,category,source_url,status) VALUES(?,?,?,?,?,?,?,?, 'pending')").bind(projectId,slug,user.id,name,summary,description,category,body.source_url?String(body.source_url).slice(0,500):null).run();
         return json({ok:true,id:projectId,slug,status:"pending"},201);
+      }
+      const developerVersionMatch=url.pathname.match(/^\\/api\\/developer\\/projects\\/([a-zA-Z0-9_-]+)\\/versions$/);
+      if(developerVersionMatch && request.method==="POST"){
+        const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
+        const project=await env.DB.prepare("SELECT id,owner_id FROM projects WHERE slug=?").bind(developerVersionMatch[1]).first();
+        if(!project)return err("Project not found",404);if(project.owner_id!==user.id)return err("Forbidden",403);
+        const body=await request.json().catch(()=>null);if(!body)return err("Invalid JSON");
+        const version=String(body.version_number||"").trim().slice(0,40);
+        const release=String(body.release_url||"").trim();
+        if(!version)return err("Version number is required");
+        try{const u=new URL(release);if(u.protocol!=="https:"||u.hostname!=="github.com")return err("Release URL must point to github.com")}catch{return err("Valid GitHub release URL is required")}
+        const channel=["release","beta","alpha"].includes(body.channel)?body.channel:"release";
+        const gameVersions=Array.isArray(body.game_versions)?body.game_versions.filter(x=>typeof x==="string").slice(0,30):[];
+        const loaders=Array.isArray(body.loaders)?body.loaders.filter(x=>typeof x==="string").slice(0,15):[];
+        const versionId=id();
+        await env.DB.prepare("INSERT INTO versions(id,project_id,version_number,changelog,game_versions,loaders,channel,release_url) VALUES(?,?,?,?,?,?,?,?)").bind(versionId,project.id,version,String(body.changelog||"").slice(0,10000),JSON.stringify(gameVersions),JSON.stringify(loaders),channel,release).run();
+        await env.DB.prepare("UPDATE projects SET updated_at=datetime('now') WHERE id=?").bind(project.id).run();
+        return json({ok:true,id:versionId},201);
+      }
+      if(url.pathname==="/api/admin/projects" && request.method==="GET"){
+        const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);if(user.role!=="admin"&&user.role!=="moderator")return err("Forbidden",403);
+        const status=["pending","approved","rejected","archived"].includes(url.searchParams.get("status"))?url.searchParams.get("status"):"pending";
+        const rows=await env.DB.prepare("SELECT p.*,u.username AS author FROM projects p JOIN users u ON u.id=p.owner_id WHERE p.status=? ORDER BY p.created_at ASC LIMIT 100").bind(status).all();
+        return json({projects:rows.results||[]});
+      }
+      const adminProjectMatch=url.pathname.match(/^\\/api\\/admin\\/projects\\/([a-zA-Z0-9_-]+)$/);
+      if(adminProjectMatch && request.method==="PATCH"){
+        const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);if(user.role!=="admin"&&user.role!=="moderator")return err("Forbidden",403);
+        const body=await request.json().catch(()=>null);const status=body&&body.status;
+        if(!["approved","rejected","archived"].includes(status))return err("Invalid project status");
+        const result=await env.DB.prepare("UPDATE projects SET status=?,updated_at=datetime('now') WHERE id=?").bind(status,adminProjectMatch[1]).run();
+        if(!result.meta.changes)return err("Project not found",404);
+        return json({ok:true,status});
+      }
+      const adminReportMatch=url.pathname.match(/^\\/api\\/admin\\/reports\\/([a-zA-Z0-9_-]+)$/);
+      if(adminReportMatch && request.method==="PATCH"){
+        const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);if(user.role!=="admin"&&user.role!=="moderator")return err("Forbidden",403);
+        const body=await request.json().catch(()=>null);const status=body&&body.status;
+        if(!["reviewing","resolved","dismissed"].includes(status))return err("Invalid report status");
+        const result=await env.DB.prepare("UPDATE reports SET status=? WHERE id=?").bind(status,adminReportMatch[1]).run();
+        if(!result.meta.changes)return err("Report not found",404);
+        return json({ok:true,status});
       }
       if(url.pathname==="/api/admin/reports" && request.method==="GET"){
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);if(user.role!=="admin"&&user.role!=="moderator")return err("Forbidden",403);
