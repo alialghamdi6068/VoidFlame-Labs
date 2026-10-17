@@ -1,8 +1,6 @@
-// Copy this file to config.js and fill these public values from Supabase > Project Settings > API.
-// The anon/publishable key is intended for browser use; RLS policies protect the database.
-// NEVER put a service_role/secret key in this file.
+// Copy to config.js only if you want to override the API URL locally.
+// This file must contain public URLs only. Never put OAuth secrets or database credentials in browser code.
 window.VOIDFLAME_CONFIG = {
-  supabaseUrl: "https://YOUR_PROJECT_ID.supabase.co",
-  supabaseAnonKey: "YOUR_SUPABASE_ANON_OR_PUBLISHABLE_KEY",
-  ownerEmail: "alialghamdi6068@gmail.com"
+  apiBaseUrl: "https://REPLACE_WITH_CLOUDFLARE_WORKER_HOST",
+  catalogueUrl: "./data/projects.json"
 };
