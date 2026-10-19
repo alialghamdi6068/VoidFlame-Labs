@@ -58,6 +58,22 @@ async function edgeLimited(binding, key) {
   const result = await binding.limit({ key });
   return result?.success === true;
 }
+async function hasExpectedSignature(file, ext, kind) {
+  const bytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const starts = (...signature) => signature.every((value, index) => bytes[index] === value);
+  if (kind === "release") {
+    if (["jar","zip","mrpack"].includes(ext)) return starts(0x50,0x4b,0x03,0x04) || starts(0x50,0x4b,0x05,0x06) || starts(0x50,0x4b,0x07,0x08);
+    if (ext === "7z") return starts(0x37,0x7a,0xbc,0xaf,0x27,0x1c);
+    return false;
+  }
+  if (ext === "png") return starts(0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a);
+  if (ext === "jpg" || ext === "jpeg") return starts(0xff,0xd8,0xff);
+  if (ext === "gif") return starts(0x47,0x49,0x46,0x38,0x37,0x61) || starts(0x47,0x49,0x46,0x38,0x39,0x61);
+  if (ext === "webp") return starts(0x52,0x49,0x46,0x46) && starts(0x57,0x45,0x42,0x50) && bytes.length >= 12;
+  if (ext === "mp4") return bytes.length >= 8 && String.fromCharCode(...bytes.slice(4,8)) === "ftyp";
+  if (ext === "webm") return starts(0x1a,0x45,0xdf,0xa3);
+  return false;
+}
 async function githubFetch(url, token) {
   return fetch(url, {headers:{Authorization:`Bearer ${token}`,Accept:"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"}});
 }
@@ -292,7 +308,8 @@ export default {
         if(file.size>50*1024*1024)return err("Upload exceeds 50 MB limit",413);
         const filename=String(file.name||"release.bin").replace(/[^a-zA-Z0-9._-]/g,"_").slice(-120);
         const ext=filename.toLowerCase().split(".").pop();
-        if(!["jar","zip","mrpack","jar.disabled","7z"].includes(ext))return err("Unsupported file type. Allowed: .jar, .zip, .mrpack, .7z",415);
+        if(!["jar","zip","mrpack","7z"].includes(ext))return err("Unsupported file type. Allowed: .jar, .zip, .mrpack, .7z",415);
+        if(!await hasExpectedSignature(file,ext,"release"))return err("File content does not match its extension.",415);
         const key=project.id+"/"+id()+"/"+filename;
         await env.FILES.put(key,file.stream(),{httpMetadata:{contentType:"application/octet-stream"},customMetadata:{projectId:project.id,ownerId:user.id,originalName:filename}});
         return json({ok:true,file_key:key,file_name:filename,file_size:file.size},201);
@@ -314,6 +331,7 @@ export default {
         const videos={mp4:"video/mp4",webm:"video/webm"};
         const contentType=images[ext]||videos[ext];
         if(!contentType)return err("Allowed media: PNG, JPG, WEBP, GIF, MP4, WEBM",415);
+        if(!await hasExpectedSignature(file,ext,"media"))return err("Media content does not match its extension.",415);
         const maxSize=contentType.startsWith("video/")?30*1024*1024:8*1024*1024;
         if(file.size>maxSize)return err(contentType.startsWith("video/")?"Video limit is 30 MB":"Image limit is 8 MB",413);
         const mediaId=id(),key=project.id+"/media/"+mediaId+"-"+filename,alt=String(form.get("alt")||"").trim().slice(0,160);
