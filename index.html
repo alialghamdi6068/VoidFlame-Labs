@@ -141,7 +141,8 @@ document.getElementById('closeModal').addEventListener('click',closeModal);backd
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800)}
 const htmlSafe=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const asArray=value=>{if(Array.isArray(value))return value;try{const parsed=JSON.parse(value||'[]');return Array.isArray(parsed)?parsed:[]}catch{return []}};
-async function loadGitHubCatalogue(){
+async function loadGitHubCatalogue(append=false){
+  if(!append)catalogueOffset=0;
   grid.innerHTML='<div class="empty" role="status">Loading projects…</div>';
   const apiBase=(window.VOIDFLAME_CONFIG?.apiBaseUrl||'').replace(/\/$/,'');
   if(apiBase){
@@ -151,15 +152,15 @@ async function loadGitHubCatalogue(){
       if(!response.ok)throw new Error('Project API unavailable');
       const payload=await response.json();
       const records=Array.isArray(payload.projects)?payload.projects:[];
-      projects.splice(0,projects.length);
+      if(!append)projects.splice(0,projects.length);
       for(const item of records){
         if(!item||typeof item.name!=='string'||typeof item.category!=='string')continue;
         const name=htmlSafe(item.name),author=htmlSafe(item.author||'Community creator'),category=htmlSafe(item.category);
         const color=/^#[0-9a-f]{3,8}$/i.test(item.color||'')?item.color:'#a8e6bd';
         projects.push({id:'api-'+String(item.id||item.slug||name).replace(/[^a-zA-Z0-9_-]/g,''),slug:String(item.slug||item.id||name),name,author,type:category,icon:htmlSafe(item.icon||'✦'),color,bg:'linear-gradient(135deg,#29372d,#202426)',desc:htmlSafe(item.summary||''),details:htmlSafe(item.description||item.summary||''),tags:asArray(item.supported_versions||item.supportedVersions).slice(0,8).map(htmlSafe),loaders:asArray(item.loaders).slice(0,12).map(htmlSafe),downloads:Number.isFinite(Number(item.downloads))?Math.max(0,Number(item.downloads)):0,stars:'—',verified:false,releaseUrl:typeof item.release_url==='string'&&/^https:\/\/github\.com\//i.test(item.release_url)?item.release_url:'',sourceUrl:typeof item.source_url==='string'&&/^https:\/\/github\.com\//i.test(item.source_url)?item.source_url:'',version:htmlSafe(item.version||'')});
       }
-      if(records.length){render();return}
-    }catch(error){console.warn('Project API unavailable; trying static catalogue',error)}
+      if(records.length||append){render();document.getElementById('loadMore').hidden=records.length<48;return}
+    }catch(error){console.warn('Project API unavailable; trying static catalogue',error);if(append){document.getElementById('loadMore').hidden=true;render();return}}
   }
   try{
     const response=await fetch('./data/projects.json',{cache:'no-store'});
@@ -167,7 +168,8 @@ async function loadGitHubCatalogue(){
     const payload=await response.json();
     const records=Array.isArray(payload)?payload:payload.projects;
     if(!Array.isArray(records))throw new Error('Invalid catalogue format');
-    projects.splice(0,projects.length);
+    if(!append)projects.splice(0,projects.length);
+    document.getElementById('loadMore').hidden=true;
     for(const item of records){
       if(!item||typeof item.name!=='string'||typeof item.category!=='string')continue;
       const name=htmlSafe(item.name),author=htmlSafe(item.author||'Community creator'),category=htmlSafe(item.category);
