@@ -139,7 +139,7 @@ function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t
 const htmlSafe=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 async function loadGitHubCatalogue(){
   grid.innerHTML='<div class="empty" role="status">Loading projects…</div>';
-  const apiBase=(window.VOIDFLAME_CONFIG?.apiBaseUrl||'').replace(/\\/$/,'');
+  const apiBase=(window.VOIDFLAME_CONFIG?.apiBaseUrl||'').replace(/\/$/,'');
   if(apiBase){
     try{
       const params=new URLSearchParams({limit:'48',sort:'downloads'});
