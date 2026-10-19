@@ -126,13 +126,17 @@ export default {
         const q=(url.searchParams.get("q")||"").trim().slice(0,100);
         const category=(url.searchParams.get("category")||"").slice(0,40);
         const sort=url.searchParams.get("sort");
-        const order=sort==="downloads"?"downloads DESC":sort==="updated"?"updated_at DESC":"created_at DESC";
+        const order=sort==="downloads"||sort==="popular"?"downloads DESC":sort==="updated"?"updated_at DESC":sort==="name"?"name COLLATE NOCASE ASC":"created_at DESC";
         const limit=Math.min(48,Math.max(1,Number(url.searchParams.get("limit"))||24));
         const offset=Math.max(0,Number(url.searchParams.get("offset"))||0);
-        let sql="SELECT p.id,p.slug,p.name,p.summary,p.category,p.icon_url,p.downloads,p.followers,p.created_at,p.updated_at,u.username AS author FROM projects p JOIN users u ON u.id=p.owner_id WHERE p.status='approved'";
+        let sql="SELECT p.id,p.slug,p.name,p.summary,p.category,p.icon_url,p.source_url,p.downloads,p.followers,p.created_at,p.updated_at,u.username AS author,(SELECT json_group_array(DISTINCT j.value) FROM versions v,json_each(v.game_versions) j WHERE v.project_id=p.id) AS supported_versions,(SELECT json_group_array(DISTINCT j.value) FROM versions v,json_each(v.loaders) j WHERE v.project_id=p.id) AS loaders FROM projects p JOIN users u ON u.id=p.owner_id WHERE p.status='approved'";
         const args=[];
-        if(q){sql+=" AND (p.name LIKE ? OR p.summary LIKE ? OR p.description LIKE ?)";args.push("%"+q+"%","%"+q+"%","%"+q+"%");}
+        if(q){sql+=" AND (p.name LIKE ? OR p.summary LIKE ? OR p.description LIKE ? OR u.username LIKE ?)";args.push("%"+q+"%","%"+q+"%","%"+q+"%","%"+q+"%");}
         if(category && category!=="all"){sql+=" AND p.category=?";args.push(category);}
+        const gameVersion=(url.searchParams.get("gameVersion")||"").slice(0,30);
+        const loader=(url.searchParams.get("loader")||"").slice(0,30);
+        if(gameVersion){sql+=" AND EXISTS(SELECT 1 FROM versions v,json_each(v.game_versions) gv WHERE v.project_id=p.id AND gv.value=?)";args.push(gameVersion);}
+        if(loader){sql+=" AND EXISTS(SELECT 1 FROM versions v,json_each(v.loaders) ld WHERE v.project_id=p.id AND ld.value=?)";args.push(loader);}
         sql+=` ORDER BY ${order} LIMIT ? OFFSET ?`;args.push(limit,offset);
         const result=await env.DB.prepare(sql).bind(...args).all();
         return json({projects:result.results||[],limit,offset});
