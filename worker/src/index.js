@@ -139,12 +139,38 @@ export default {
         return response;
       }
       if (url.pathname === "/api/auth/logout" && request.method === "POST") {
-        const user = await sessionUser(request,env);
         const token = getCookie(request,"vf_session");
         if (token) await env.DB.prepare("DELETE FROM sessions WHERE id=?").bind(token.split(".")[0]).run();
         return new Response(JSON.stringify({ok:true}),{headers:{"content-type":"application/json","cache-control":"no-store","set-cookie":clearCookie}});
       }
       if (url.pathname === "/api/me" && request.method === "GET") return json({user:await sessionUser(request,env)});
+      // Users can inspect and revoke only their own sessions. Never return session IDs/tokens.
+      if (url.pathname === "/api/me/sessions" && request.method === "GET") {
+        const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
+        const token=getCookie(request,"vf_session");
+        const sid=token.split(".")[0];
+        const rows=await env.DB.prepare("SELECT created_at,expires_at,CASE WHEN id=? THEN 1 ELSE 0 END AS current FROM sessions WHERE user_id=? AND expires_at>datetime('now') ORDER BY created_at DESC LIMIT 50").bind(sid,user.id).all();
+        return json({sessions:rows.results||[]});
+      }
+      if (url.pathname === "/api/me/sessions" && request.method === "DELETE") {
+        const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
+        const token=getCookie(request,"vf_session");
+        const sid=token.split(".")[0];
+        await env.DB.prepare("DELETE FROM sessions WHERE user_id=? AND id<>?").bind(user.id,sid).run();
+        return json({ok:true,revoked:"other_sessions"});
+      }
+      // Data portability: return only the authenticated user's account data.
+      if (url.pathname === "/api/me/export" && request.method === "GET") {
+        const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
+        const [projects,favorites,follows,comments,reports]=await Promise.all([
+          env.DB.prepare("SELECT id,slug,name,summary,description,requirements,category,source_url,status,created_at,updated_at FROM projects WHERE owner_id=? ORDER BY created_at DESC").bind(user.id).all(),
+          env.DB.prepare("SELECT p.slug,p.name,f.created_at FROM favorites f JOIN projects p ON p.id=f.project_id WHERE f.user_id=? ORDER BY f.created_at DESC").bind(user.id).all(),
+          env.DB.prepare("SELECT p.slug,p.name,f.created_at FROM follows f JOIN projects p ON p.id=f.project_id WHERE f.user_id=? ORDER BY f.created_at DESC").bind(user.id).all(),
+          env.DB.prepare("SELECT c.id,c.project_id,c.body,c.status,c.created_at FROM comments c WHERE c.user_id=? ORDER BY c.created_at DESC").bind(user.id).all(),
+          env.DB.prepare("SELECT id,project_id,reason,details,status,created_at FROM reports WHERE reporter_id=? ORDER BY created_at DESC").bind(user.id).all()
+        ]);
+        return json({exported_at:new Date().toISOString(),account:{username:user.username,display_name:user.display_name,avatar_url:user.avatar_url,bio:user.bio,created_at:(await env.DB.prepare("SELECT created_at FROM users WHERE id=?").bind(user.id).first())?.created_at},projects:projects.results||[],favorites:favorites.results||[],follows:follows.results||[],comments:comments.results||[],reports:reports.results||[]},200,{"content-disposition":'attachment; filename="voidflame-account-export.json"'});
+      }
       if (url.pathname === "/api/projects" && request.method === "GET") {
         const q=(url.searchParams.get("q")||"").trim().slice(0,100);
         const category=(url.searchParams.get("category")||"").slice(0,40);
@@ -401,7 +427,19 @@ export default {
       }
       return err("Not found",404);
     } catch (e) {
+      // Keep implementation details, SQL text, and credentials out of client responses.
       return json({error:"Internal server error" },500);
     }
+  },
+  async scheduled(_event, env, ctx) {
+    // Daily data hygiene. User content and audit history are retained; only expired
+    // sessions, stale rate-limit buckets, and old aggregate analytics are pruned.
+    ctx.waitUntil((async()=>{
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')"),
+        env.DB.prepare("DELETE FROM rate_limits WHERE window_started < ?").bind(Math.floor(Date.now()/1000)-86400),
+        env.DB.prepare("DELETE FROM analytics_events WHERE created_at < datetime('now','-180 days')")
+      ]);
+    })());
   }
 };
