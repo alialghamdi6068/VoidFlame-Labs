@@ -213,6 +213,19 @@ export default {
         await env.DB.prepare("INSERT INTO projects(id,slug,owner_id,name,summary,description,category,source_url,status) VALUES(?,?,?,?,?,?,?,?, 'pending')").bind(projectId,slug,user.id,name,summary,description,category,body.source_url?String(body.source_url).slice(0,500):null).run();
         return json({ok:true,id:projectId,slug,status:"pending"},201);
       }
+      const developerProjectMatch=url.pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)$/);
+      if(developerProjectMatch && request.method==="PATCH"){
+        const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
+        if(!await allowRate(request,env,"project-edit",10,3600,user.id))return err("Project edit rate limit exceeded.",429);
+        const project=await env.DB.prepare("SELECT id,owner_id FROM projects WHERE slug=?").bind(developerProjectMatch[1]).first();
+        if(!project)return err("Project not found",404);if(project.owner_id!==user.id)return err("Forbidden",403);
+        const body=await request.json().catch(()=>null);if(!body||typeof body!=="object")return err("Invalid JSON");
+        const name=String(body.name||"").trim().slice(0,80),summary=String(body.summary||"").trim().slice(0,180),description=String(body.description||"").trim().slice(0,20000),category=String(body.category||"").trim().slice(0,40);
+        if(name.length<2||summary.length<10||!category)return err("Name, summary (10+ chars) and category are required");
+        let source=null;if(body.source_url){try{const u=new URL(String(body.source_url));if(u.protocol!=="https:"||u.hostname!=="github.com")return err("Source URL must point to github.com");source=u.href}catch{return err("Valid GitHub source URL is required")}}
+        await env.DB.prepare("UPDATE projects SET name=?,summary=?,description=?,category=?,source_url=?,status='pending',updated_at=datetime('now') WHERE id=?").bind(name,summary,description,category,source,project.id).run();
+        return json({ok:true,slug:developerProjectMatch[1],status:"pending"});
+      }
       const uploadMatch=url.pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)\/upload$/);
       if(uploadMatch && request.method==="POST"){
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
