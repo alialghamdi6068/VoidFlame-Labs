@@ -53,6 +53,11 @@ async function allowRate(request, env, action, max, windowSeconds=60, identity="
   const row=await env.DB.prepare("SELECT count FROM rate_limits WHERE key=?").bind(key).first();
   return Number(row?.count||0)<=max;
 }
+async function edgeLimited(binding, key) {
+  if (!binding || typeof binding.limit !== "function") return true;
+  const result = await binding.limit({ key });
+  return result?.success === true;
+}
 async function githubFetch(url, token) {
   return fetch(url, {headers:{Authorization:`Bearer ${token}`,Accept:"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"}});
 }
@@ -60,6 +65,10 @@ export default {
   async fetch(request, env) {
     const response = await this.handle(request, env);
     const origin = request.headers.get("Origin");
+    response.headers.set("x-content-type-options", "nosniff");
+    response.headers.set("x-frame-options", "DENY");
+    response.headers.set("referrer-policy", "strict-origin-when-cross-origin");
+    response.headers.set("permissions-policy", "camera=(), microphone=(), geolocation=()");
     if (origin && origin === new URL(env.SITE_URL).origin) {
       response.headers.set("access-control-allow-origin", origin);
       response.headers.set("access-control-allow-credentials", "true");
@@ -69,8 +78,22 @@ export default {
   },
   async handle(request, env) {
     const url = new URL(request.url);
-    if (request.method === "OPTIONS") return new Response(null,{status:204,headers:{"access-control-allow-origin":new URL(env.SITE_URL).origin,"access-control-allow-methods":"GET,POST,PATCH,DELETE,OPTIONS","access-control-allow-headers":"Content-Type","access-control-allow-credentials":"true","vary":"Origin"}});
+    if (request.method === "OPTIONS") return new Response(null,{status:204,headers:{"access-control-allow-origin":new URL(env.SITE_URL).origin,"access-control-allow-methods":"GET,POST,PATCH,DELETE,OPTIONS","access-control-allow-headers":"Content-Type","access-control-allow-credentials":"true","vary":"Origin","x-content-type-options":"nosniff","x-frame-options":"DENY"}});
     if (!url.pathname.startsWith("/api/")) return err("Not found",404);
+    // Cloudflare-native per-IP limits run before application/database work. Keep
+    // these bindings enabled in wrangler.toml and mirror them with edge WAF rules.
+    const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
+    try {
+      if (!await edgeLimited(env.API_LIMITER, clientIp)) return err("Too many requests. Try again shortly.",429,{"retry-after":"60"});
+      if (url.pathname.startsWith("/api/auth/") && !await edgeLimited(env.AUTH_LIMITER, clientIp)) return err("Too many authentication requests. Try again shortly.",429,{"retry-after":"60"});
+      if ((url.pathname.endsWith("/upload") || url.pathname.endsWith("/media")) && request.method === "POST" && !await edgeLimited(env.UPLOAD_LIMITER, clientIp)) return err("Upload rate limit exceeded. Try again shortly.",429,{"retry-after":"60"});
+    } catch {
+      // Do not silently bypass a configured edge limiter if its service errors.
+      if (env.API_LIMITER || env.AUTH_LIMITER || env.UPLOAD_LIMITER) return err("Traffic protection is temporarily unavailable.",503);
+    }
+    const contentLength = Number(request.headers.get("content-length") || 0);
+    const isUploadRequest = request.method === "POST" && (url.pathname.endsWith("/upload") || url.pathname.endsWith("/media"));
+    if (contentLength > (isUploadRequest ? 52*1024*1024 : 1024*1024)) return err(isUploadRequest ? "Upload request exceeds the 50 MB limit." : "Request body is too large.",413);
     if (!requireSameOrigin(request, env)) return err("Origin not allowed",403);
     try {
       // GitHub OAuth: state is signed and stored in a short-lived HttpOnly cookie.
@@ -253,6 +276,8 @@ export default {
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
         if(!await allowRate(request,env,"media-upload",20,600,user.id))return err("Media upload rate limit exceeded.",429);
         if(!env.FILES)return err("File storage is not configured",503);
+        const mediaRequestLength=Number(request.headers.get("content-length")||0);
+        if(mediaRequestLength>31*1024*1024)return err("Media request exceeds the 30 MB limit.",413);
         const project=await env.DB.prepare("SELECT id,owner_id,name FROM projects WHERE slug=?").bind(mediaUploadMatch[1]).first();
         if(!project)return err("Project not found",404);if(project.owner_id!==user.id)return err("Forbidden",403);
         const form=await request.formData();const file=form.get("file");
