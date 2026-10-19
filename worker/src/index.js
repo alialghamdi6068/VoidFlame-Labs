@@ -145,7 +145,7 @@ export default {
       if(projectMatch && request.method==="GET"){
         const project=await env.DB.prepare("SELECT p.*,u.username AS author,u.avatar_url AS author_avatar FROM projects p JOIN users u ON u.id=p.owner_id WHERE p.slug=? AND p.status='approved'").bind(projectMatch[1]).first();
         if(!project)return err("Project not found",404);
-        await env.DB.prepare("INSERT INTO analytics_events(id,project_id,event_type) VALUES(?,?,'view')").bind(id(),project.id).run();
+        if(await allowRate(request,env,"view",1,60,project.id))await env.DB.prepare("INSERT INTO analytics_events(id,project_id,event_type) VALUES(?,?,'view')").bind(id(),project.id).run();
         const versions=await env.DB.prepare("SELECT id,version_number,changelog,game_versions,loaders,channel,file_name,file_size,release_url,downloads,created_at FROM versions WHERE project_id=? ORDER BY created_at DESC").bind(project.id).all();
         const comments=await env.DB.prepare("SELECT c.id,c.body,c.created_at,u.username,u.avatar_url FROM comments c JOIN users u ON u.id=c.user_id WHERE c.project_id=? AND c.status='visible' ORDER BY c.created_at DESC LIMIT 100").bind(project.id).all();
         return json({project,versions:versions.results||[],comments:comments.results||[]});
@@ -262,6 +262,7 @@ export default {
         if(!env.FILES)return err("File storage is not configured",503);
         const v=await env.DB.prepare("SELECT v.id,v.project_id,v.file_key,v.file_name,p.status FROM versions v JOIN projects p ON p.id=v.project_id WHERE v.id=?").bind(downloadMatch[1]).first();
         if(!v||v.status!=="approved")return err("Version not found",404);
+        if(!await allowRate(request,env,"download",30,60,v.id))return err("Download rate limit exceeded. Try again shortly.",429);
         if(!v.file_key)return err("This version is hosted externally",404);
         const object=await env.FILES.get(v.file_key);if(!object)return err("Release file is missing",404);
         await env.DB.batch([
