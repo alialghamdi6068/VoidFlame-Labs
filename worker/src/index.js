@@ -146,8 +146,10 @@ export default {
         const project=await env.DB.prepare("SELECT p.*,u.username AS author,u.avatar_url AS author_avatar FROM projects p JOIN users u ON u.id=p.owner_id WHERE p.slug=? AND p.status='approved'").bind(projectMatch[1]).first();
         if(!project)return err("Project not found",404);
         if(await allowRate(request,env,"view",1,60,project.id))await env.DB.prepare("INSERT INTO analytics_events(id,project_id,event_type) VALUES(?,?,'view')").bind(id(),project.id).run();
-        const versions=await env.DB.prepare("SELECT id,version_number,changelog,game_versions,loaders,channel,file_name,file_size,release_url,downloads,created_at FROM versions WHERE project_id=? ORDER BY created_at DESC").bind(project.id).all();
+        const versions=await env.DB.prepare("SELECT id,version_number,changelog,game_versions,loaders,dependencies,channel,file_name,file_size,release_url,downloads,created_at FROM versions WHERE project_id=? ORDER BY created_at DESC").bind(project.id).all();
         const comments=await env.DB.prepare("SELECT c.id,c.body,c.created_at,u.username,u.avatar_url FROM comments c JOIN users u ON u.id=c.user_id WHERE c.project_id=? AND c.status='visible' ORDER BY c.created_at DESC LIMIT 100").bind(project.id).all();
+        const media=await env.DB.prepare("SELECT id,alt,content_type FROM project_media WHERE project_id=? ORDER BY created_at DESC LIMIT 40").bind(project.id).all();
+        project.gallery=(media.results||[]).map(m=>({url:new URL("/api/media/"+m.id,env.API_URL||request.url).toString(),alt:m.alt||project.name,type:m.content_type.startsWith("video/")?"video":"image"}));
         return json({project,versions:versions.results||[],comments:comments.results||[]});
       }
       const projectSub=url.pathname.match(/^\/api\/projects\/([a-zA-Z0-9_-]+)\/(favorite|follow|comments|report|versions)$/);
@@ -155,7 +157,7 @@ export default {
         const [,slug,action]=projectSub;
         const project=await env.DB.prepare("SELECT id,owner_id FROM projects WHERE slug=? AND status='approved'").bind(slug).first();
         if(!project)return err("Project not found",404);
-        if(request.method==="GET" && action==="versions") return json({versions:(await env.DB.prepare("SELECT id,version_number,changelog,game_versions,loaders,channel,file_name,file_size,downloads,created_at FROM versions WHERE project_id=? ORDER BY created_at DESC").bind(project.id).all()).results||[]});
+        if(request.method==="GET" && action==="versions") return json({versions:(await env.DB.prepare("SELECT id,version_number,changelog,game_versions,loaders,dependencies,channel,file_name,file_size,downloads,created_at FROM versions WHERE project_id=? ORDER BY created_at DESC").bind(project.id).all()).results||[]});
         if(request.method!=="POST")return err("Method not allowed",405);
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
         const rateAction=action==="comments"?"comment":action==="report"?"report":action;
@@ -246,6 +248,37 @@ export default {
         await env.FILES.put(key,file.stream(),{httpMetadata:{contentType:"application/octet-stream"},customMetadata:{projectId:project.id,ownerId:user.id,originalName:filename}});
         return json({ok:true,file_key:key,file_name:filename,file_size:file.size},201);
       }
+      const mediaUploadMatch=url.pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)\/media$/);
+      if(mediaUploadMatch && request.method==="POST"){
+        const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
+        if(!await allowRate(request,env,"media-upload",20,600,user.id))return err("Media upload rate limit exceeded.",429);
+        if(!env.FILES)return err("File storage is not configured",503);
+        const project=await env.DB.prepare("SELECT id,owner_id,name FROM projects WHERE slug=?").bind(mediaUploadMatch[1]).first();
+        if(!project)return err("Project not found",404);if(project.owner_id!==user.id)return err("Forbidden",403);
+        const form=await request.formData();const file=form.get("file");
+        if(!file||typeof file.arrayBuffer!=="function"||!file.size)return err("A media file is required");
+        const filename=String(file.name||"media.bin").replace(/[^a-zA-Z0-9._-]/g,"_").slice(-120);
+        const ext=filename.toLowerCase().split(".").pop();
+        const images={png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",webp:"image/webp",gif:"image/gif"};
+        const videos={mp4:"video/mp4",webm:"video/webm"};
+        const contentType=images[ext]||videos[ext];
+        if(!contentType)return err("Allowed media: PNG, JPG, WEBP, GIF, MP4, WEBM",415);
+        const maxSize=contentType.startsWith("video/")?30*1024*1024:8*1024*1024;
+        if(file.size>maxSize)return err(contentType.startsWith("video/")?"Video limit is 30 MB":"Image limit is 8 MB",413);
+        const mediaId=id(),key=project.id+"/media/"+mediaId+"-"+filename,alt=String(form.get("alt")||"").trim().slice(0,160);
+        await env.FILES.put(key,file.stream(),{httpMetadata:{contentType},customMetadata:{projectId:project.id,mediaId,originalName:filename}});
+        await env.DB.prepare("INSERT INTO project_media(id,project_id,file_key,file_name,content_type,file_size,alt) VALUES(?,?,?,?,?,?,?)").bind(mediaId,project.id,key,filename,contentType,file.size,alt).run();
+        await env.DB.prepare("UPDATE projects SET updated_at=datetime('now') WHERE id=?").bind(project.id).run();
+        return json({ok:true,id:mediaId,url:new URL("/api/media/"+mediaId,env.API_URL||request.url).toString(),type:contentType.startsWith("video/")?"video":"image"},201);
+      }
+      const mediaMatch=url.pathname.match(/^\/api\/media\/([a-zA-Z0-9_-]+)$/);
+      if(mediaMatch && request.method==="GET"){
+        if(!env.FILES)return err("File storage is not configured",503);
+        const media=await env.DB.prepare("SELECT m.file_key,m.file_name,m.content_type,m.file_size,p.status FROM project_media m JOIN projects p ON p.id=m.project_id WHERE m.id=?").bind(mediaMatch[1]).first();
+        if(!media||media.status!=="approved")return err("Media not found",404);
+        const object=await env.FILES.get(media.file_key);if(!object)return err("Media file is missing",404);
+        return new Response(object.body,{headers:{"content-type":media.content_type,"content-length":String(object.size),"content-disposition":"inline; filename=\""+String(media.file_name||"media").replace(/["\\\r\n]/g,"_")+"\"","cache-control":"public, max-age=3600","x-content-type-options":"nosniff"}});
+      }
       const developerVersionMatch=url.pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)\/versions$/);
       if(developerVersionMatch && request.method==="POST"){
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
@@ -268,7 +301,8 @@ export default {
         const gameVersions=Array.isArray(body.game_versions)?body.game_versions.filter(x=>typeof x==="string").slice(0,30):[];
         const loaders=Array.isArray(body.loaders)?body.loaders.filter(x=>typeof x==="string").slice(0,15):[];
         const versionId=id();
-        await env.DB.prepare("INSERT INTO versions(id,project_id,version_number,changelog,game_versions,loaders,channel,file_key,file_name,file_size,release_url) VALUES(?,?,?,?,?,?,?,?,?,?,?)").bind(versionId,project.id,version,String(body.changelog||"").slice(0,10000),JSON.stringify(gameVersions),JSON.stringify(loaders),channel,fileKey||null,fileName,fileSize,release).run();
+        const dependencies=Array.isArray(body.dependencies)?body.dependencies.filter(x=>typeof x==="string").slice(0,30):[];
+        await env.DB.prepare("INSERT INTO versions(id,project_id,version_number,changelog,game_versions,loaders,dependencies,channel,file_key,file_name,file_size,release_url) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)").bind(versionId,project.id,version,String(body.changelog||"").slice(0,10000),JSON.stringify(gameVersions),JSON.stringify(loaders),JSON.stringify(dependencies),channel,fileKey||null,fileName,fileSize,release).run();
         await env.DB.prepare("UPDATE projects SET updated_at=datetime('now') WHERE id=?").bind(project.id).run();
         return json({ok:true,id:versionId},201);
       }
