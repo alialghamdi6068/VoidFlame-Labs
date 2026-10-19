@@ -208,9 +208,11 @@ export default {
         const body=await request.json().catch(()=>null);if(!body)return err("Invalid JSON");
         const name=String(body.name||"").trim().slice(0,80),summary=String(body.summary||"").trim().slice(0,180),description=String(body.description||"").trim().slice(0,20000),category=String(body.category||"").trim().slice(0,40);
         if(name.length<2||summary.length<10||!category)return err("Name, summary (10+ chars) and category are required");
+        let source=null;
+        if(body.source_url){try{const u=new URL(String(body.source_url));if(u.protocol!=="https:"||u.hostname!=="github.com")return err("Source URL must point to github.com");source=u.href}catch{return err("Valid GitHub source URL is required")}}
         const slug=slugify(name)+"-"+id().slice(0,8);
         const projectId=id();
-        await env.DB.prepare("INSERT INTO projects(id,slug,owner_id,name,summary,description,category,source_url,status) VALUES(?,?,?,?,?,?,?,?, 'pending')").bind(projectId,slug,user.id,name,summary,description,category,body.source_url?String(body.source_url).slice(0,500):null).run();
+        await env.DB.prepare("INSERT INTO projects(id,slug,owner_id,name,summary,description,category,source_url,status) VALUES(?,?,?,?,?,?,?,?, 'pending')").bind(projectId,slug,user.id,name,summary,description,category,source).run();
         return json({ok:true,id:projectId,slug,status:"pending"},201);
       }
       const developerProjectMatch=url.pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)$/);
