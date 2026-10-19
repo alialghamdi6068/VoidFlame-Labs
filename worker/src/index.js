@@ -36,7 +36,7 @@ async function sessionUser(request, env) {
 }
 function requireSameOrigin(request, env) {
   const origin = request.headers.get("Origin");
-  if (!origin) return true;
+  if (!origin) return ["GET","HEAD","OPTIONS"].includes(request.method);
   return origin === new URL(env.SITE_URL).origin;
 }
 function slugify(value) {
