@@ -1,38 +1,33 @@
 # VoidFlame Labs API
 
-This directory contains the initial Cloudflare Workers API scaffold. It is not production-ready until deployment bindings, OAuth secrets, migrations, rate limiting, and end-to-end tests are configured.
+Cloudflare Workers + D1 + R2 backend for the VoidFlame Labs static frontend.
 
-## Architecture
+## Deployment checklist
 
-- GitHub Pages serves the public static frontend.
-- `data/projects.json` remains the canonical public catalogue for published projects.
-- Cloudflare Workers provides authenticated APIs.
-- Cloudflare D1 stores accounts, sessions, drafts, comments, favorites, follows, reports, and analytics.
-- Cloudflare R2 is reserved for project/version files; uploads must be implemented with strict size/type limits before enabling public uploads.
-- Public project catalogue changes still require maintainer review and a GitHub commit. Never auto-merge untrusted submissions into `data/projects.json`.
+1. Create a Cloudflare D1 database named `voidflame-labs` and an R2 bucket named `voidflame-labs-files`.
+2. Replace `database_id` in `wrangler.toml` with the real D1 database ID.
+3. Set `SITE_URL` to the deployed site origin. Set `API_URL` to the deployed Worker origin.
+4. Create a GitHub OAuth App with callback `https://YOUR_WORKER_HOST/api/auth/callback`; set `GITHUB_CLIENT_ID` as a Worker variable and secrets with:
+   - `npx wrangler secret put GITHUB_CLIENT_SECRET`
+   - `npx wrangler secret put SESSION_SECRET` (long random secret)
+5. Apply the checked-in migration: `npx wrangler d1 migrations apply voidflame-labs --remote`.
+6. Deploy: `npx wrangler deploy`.
+7. Update the public `config.js` file in the repository with the Worker origin. It contains public URLs only, never secrets.
+8. Run OAuth, upload, download, moderation, and mobile-browser tests before public launch.
 
-## Required configuration
+## Current functionality
 
-1. Create a Cloudflare D1 database and an R2 bucket.
-2. Replace the D1 `database_id` in `wrangler.toml` with the actual database ID.
-3. Set `SITE_URL` to the deployed GitHub Pages URL or custom domain.
-4. Create a GitHub OAuth App. Set its callback URL to `https://YOUR_API_HOST/api/auth/callback` after choosing the Worker API hostname; the current initial scaffold expects the callback on the same origin as `SITE_URL`, so configure a same-origin Worker route or update the callback implementation before use.
-5. Configure secrets with Wrangler:
-   - `wrangler secret put GITHUB_CLIENT_SECRET`
-   - `wrangler secret put SESSION_SECRET` (use a long random secret)
-6. Apply `schema.sql` to D1 using Wrangler's D1 execute command.
-7. Deploy the Worker and configure a same-origin route or update frontend API base URL/CORS and OAuth callback handling.
-8. Do not use this API in production until OAuth cookie handling, CSRF protection, rate limiting, moderation authorization, file upload validation, and integration tests are reviewed.
+- GitHub OAuth with signed, HttpOnly session cookies and D1 sessions.
+- Approved project discovery and project detail API.
+- Developer project submissions and R2 uploads (50 MB cap, allowlisted extensions).
+- Version metadata and download proxy with download counters/analytics.
+- Favorites, follows, comments, reports, and admin/moderator project/report endpoints.
+- Static JSON catalogue remains a fallback when the API is not configured.
 
-## API routes in the current scaffold
+## Important limitations before production
 
-- `GET /api/auth/github`, `GET /api/auth/callback`, `POST /api/auth/logout`
-- `GET /api/me`
-- `GET /api/projects`, `GET /api/projects/:slug`
-- `GET /api/projects/:slug/versions`
-- `POST /api/projects/:slug/favorite`, `POST /api/projects/:slug/follow`
-- `POST /api/projects/:slug/comments`, `POST /api/projects/:slug/report`
-- `GET/POST /api/developer/projects`
-- `GET /api/admin/reports`
-
-This is an early scaffold, not a claim that every feature is complete or production-secure. The public website must continue to work without this API until deployment and integration are verified.
+- Configure a same-site custom domain or test cross-origin cookies in the browsers you support; third-party cookie restrictions can block a GitHub Pages-to-workers.dev session.
+- Assign initial `admin` or `moderator` roles manually in D1 to trusted accounts only.
+- Add a production rate-limit binding or apply the included D1 rate-limit migration before high-traffic launch.
+- Review malware scanning, retention policy, abuse reporting, backup/recovery, and integration/security tests before accepting public uploads.
+- GitHub Pages and the Worker must both be deployed. A passing static-site workflow alone does not prove the API is configured.
