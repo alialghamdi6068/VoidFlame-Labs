@@ -19,8 +19,8 @@ Cloudflare Workers + D1 + R2 backend for the VoidFlame Labs static frontend.
 
 - GitHub OAuth with signed, HttpOnly session cookies and D1 sessions.
 - Approved project discovery and project detail API.
-- Developer project submissions and R2 uploads (50 MB cap, allowlisted extensions).
-- Version metadata and download proxy with download counters/analytics.
+- Developer project submissions/edits, R2 release uploads (50 MB cap), and image/video gallery uploads (8 MB images, 30 MB videos).
+- Version metadata, dependencies, download proxy, project gallery media proxy, and view/download analytics.
 - Favorites, follows, comments, reports, and admin/moderator project/report endpoints.
 - Static JSON catalogue remains a fallback when the API is not configured.
 
