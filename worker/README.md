@@ -31,3 +31,8 @@ Cloudflare Workers + D1 + R2 backend for the VoidFlame Labs static frontend.
 - Add a production rate-limit binding or apply the included D1 rate-limit migration before high-traffic launch.
 - Review malware scanning, retention policy, abuse reporting, backup/recovery, and integration/security tests before accepting public uploads.
 - GitHub Pages and the Worker must both be deployed. A passing static-site workflow alone does not prove the API is configured.
+
+
+## Security and DDoS protection
+
+See [SECURITY.md](./SECURITY.md) for the implemented Worker limits and the required Cloudflare dashboard/WAF setup. The Worker bindings must be deployed, and edge DDoS/WAF controls must be enabled on the production hostname; code changes alone do not activate account-level Cloudflare rules.
