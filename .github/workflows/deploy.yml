@@ -38,6 +38,8 @@ jobs:
           PY
       - name: Validate D1 migrations and constraints
         run: python3 worker/tests/test_schema.py
+      - name: Check security contracts
+        run: python3 worker/tests/test_security_contract.py
       - name: Check JavaScript syntax
         run: |
           python3 - <<'PY'
