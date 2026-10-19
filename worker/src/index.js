@@ -224,7 +224,7 @@ export default {
         const project=await env.DB.prepare("SELECT id,owner_id FROM projects WHERE slug=?").bind(developerProjectMatch[1]).first();
         if(!project)return err("Project not found",404);if(project.owner_id!==user.id)return err("Forbidden",403);
         const body=await request.json().catch(()=>null);if(!body||typeof body!=="object")return err("Invalid JSON");
-        const name=String(body.name||"").trim().slice(0,80),summary=String(body.summary||"").trim().slice(0,180),description=String(body.description||"").trim().slice(0,20000),category=String(body.category||"").trim().slice(0,40);
+        const name=String(body.name||"").trim().slice(0,80),summary=String(body.summary||"").trim().slice(0,180),description=String(body.description||"").trim().slice(0,20000),requirements=String(body.requirements||"").trim().slice(0,5000),category=String(body.category||"").trim().slice(0,40);
         if(name.length<2||summary.length<10||!category)return err("Name, summary (10+ chars) and category are required");
         let source=null;if(body.source_url){try{const u=new URL(String(body.source_url));if(u.protocol!=="https:"||u.hostname!=="github.com")return err("Source URL must point to github.com");source=u.href}catch{return err("Valid GitHub source URL is required")}}
         await env.DB.prepare("UPDATE projects SET name=?,summary=?,description=?,requirements=?,category=?,source_url=?,status='pending',updated_at=datetime('now') WHERE id=?").bind(name,summary,description,requirements,category,source,project.id).run();
