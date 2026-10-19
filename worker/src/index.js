@@ -208,13 +208,13 @@ export default {
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
         if(!await allowRate(request,env,"project-create",5,3600,user.id))return err("Project submission rate limit exceeded.",429);
         const body=await request.json().catch(()=>null);if(!body)return err("Invalid JSON");
-        const name=String(body.name||"").trim().slice(0,80),summary=String(body.summary||"").trim().slice(0,180),description=String(body.description||"").trim().slice(0,20000),category=String(body.category||"").trim().slice(0,40);
+        const name=String(body.name||"").trim().slice(0,80),summary=String(body.summary||"").trim().slice(0,180),description=String(body.description||"").trim().slice(0,20000),requirements=String(body.requirements||"").trim().slice(0,5000),category=String(body.category||"").trim().slice(0,40);
         if(name.length<2||summary.length<10||!category)return err("Name, summary (10+ chars) and category are required");
         let source=null;
         if(body.source_url){try{const u=new URL(String(body.source_url));if(u.protocol!=="https:"||u.hostname!=="github.com")return err("Source URL must point to github.com");source=u.href}catch{return err("Valid GitHub source URL is required")}}
         const slug=slugify(name)+"-"+id().slice(0,8);
         const projectId=id();
-        await env.DB.prepare("INSERT INTO projects(id,slug,owner_id,name,summary,description,category,source_url,status) VALUES(?,?,?,?,?,?,?,?, 'pending')").bind(projectId,slug,user.id,name,summary,description,category,source).run();
+        await env.DB.prepare("INSERT INTO projects(id,slug,owner_id,name,summary,description,requirements,category,source_url,status) VALUES(?,?,?,?,?,?,?,?,?, 'pending')").bind(projectId,slug,user.id,name,summary,description,requirements,category,source).run();
         return json({ok:true,id:projectId,slug,status:"pending"},201);
       }
       const developerProjectMatch=url.pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)$/);
@@ -227,7 +227,7 @@ export default {
         const name=String(body.name||"").trim().slice(0,80),summary=String(body.summary||"").trim().slice(0,180),description=String(body.description||"").trim().slice(0,20000),category=String(body.category||"").trim().slice(0,40);
         if(name.length<2||summary.length<10||!category)return err("Name, summary (10+ chars) and category are required");
         let source=null;if(body.source_url){try{const u=new URL(String(body.source_url));if(u.protocol!=="https:"||u.hostname!=="github.com")return err("Source URL must point to github.com");source=u.href}catch{return err("Valid GitHub source URL is required")}}
-        await env.DB.prepare("UPDATE projects SET name=?,summary=?,description=?,category=?,source_url=?,status='pending',updated_at=datetime('now') WHERE id=?").bind(name,summary,description,category,source,project.id).run();
+        await env.DB.prepare("UPDATE projects SET name=?,summary=?,description=?,requirements=?,category=?,source_url=?,status='pending',updated_at=datetime('now') WHERE id=?").bind(name,summary,description,requirements,category,source,project.id).run();
         return json({ok:true,slug:developerProjectMatch[1],status:"pending"});
       }
       const uploadMatch=url.pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)\/upload$/);
