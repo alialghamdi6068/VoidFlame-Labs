@@ -36,6 +36,8 @@ jobs:
                   raise SystemExit(f"Project entry {index} must include name, category, and summary")
           print(f"Catalogue valid: {len(projects)} approved project(s)")
           PY
+      - name: Validate D1 migrations and constraints
+        run: python3 worker/tests/test_schema.py
       - name: Check JavaScript syntax
         run: |
           python3 - <<'PY'
