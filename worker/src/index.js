@@ -181,6 +181,22 @@ export default {
           return json({ok:true,id:reportId},201);
         }
       }
+      if(url.pathname==="/api/me/profile" && request.method==="PATCH"){
+        const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
+        if(!await allowRate(request,env,"profile-update",10,3600,user.id))return err("Profile update rate limit exceeded.",429);
+        const body=await request.json().catch(()=>null);if(!body||typeof body!=="object")return err("Invalid JSON");
+        const displayName=String(body.display_name??user.display_name??user.username).trim().slice(0,60);
+        const bio=String(body.bio??user.bio??"").trim().slice(0,300);
+        if(!displayName)return err("Display name cannot be empty");
+        await env.DB.prepare("UPDATE users SET display_name=?,bio=?,updated_at=datetime('now') WHERE id=?").bind(displayName,bio,user.id).run();
+        return json({ok:true,display_name:displayName,bio});
+      }
+      if((url.pathname==="/api/me/favorites"||url.pathname==="/api/me/follows") && request.method==="GET"){
+        const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
+        const table=url.pathname.endsWith("favorites")?"favorites":"follows";
+        const rows=await env.DB.prepare(`SELECT p.id,p.slug,p.name,p.summary,p.category,p.icon_url,p.downloads,p.updated_at,u.username AS author FROM ${table} f JOIN projects p ON p.id=f.project_id JOIN users u ON u.id=p.owner_id WHERE f.user_id=? AND p.status='approved' ORDER BY f.created_at DESC LIMIT 200`).bind(user.id).all();
+        return json({projects:rows.results||[]});
+      }
       if(url.pathname==="/api/developer/projects" && request.method==="GET"){
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
         const projects=await env.DB.prepare("SELECT p.*, (SELECT COUNT(*) FROM versions v WHERE v.project_id=p.id) AS version_count, (SELECT COUNT(*) FROM analytics_events a WHERE a.project_id=p.id AND a.event_type='view') AS view_count, (SELECT COUNT(*) FROM analytics_events a WHERE a.project_id=p.id AND a.event_type='download') AS tracked_downloads FROM projects p WHERE p.owner_id=? ORDER BY p.updated_at DESC").bind(user.id).all();
