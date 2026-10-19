@@ -178,7 +178,7 @@ export default {
         await env.DB.prepare("INSERT INTO projects(id,slug,owner_id,name,summary,description,category,source_url,status) VALUES(?,?,?,?,?,?,?,?, 'pending')").bind(projectId,slug,user.id,name,summary,description,category,body.source_url?String(body.source_url).slice(0,500):null).run();
         return json({ok:true,id:projectId,slug,status:"pending"},201);
       }
-      const developerVersionMatch=url.pathname.match(/^\\/api\\/developer\\/projects\\/([a-zA-Z0-9_-]+)\\/versions$/);
+      const developerVersionMatch=url.pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)\/versions$/);
       if(developerVersionMatch && request.method==="POST"){
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
         const project=await env.DB.prepare("SELECT id,owner_id FROM projects WHERE slug=?").bind(developerVersionMatch[1]).first();
@@ -202,7 +202,7 @@ export default {
         const rows=await env.DB.prepare("SELECT p.*,u.username AS author FROM projects p JOIN users u ON u.id=p.owner_id WHERE p.status=? ORDER BY p.created_at ASC LIMIT 100").bind(status).all();
         return json({projects:rows.results||[]});
       }
-      const adminProjectMatch=url.pathname.match(/^\\/api\\/admin\\/projects\\/([a-zA-Z0-9_-]+)$/);
+      const adminProjectMatch=url.pathname.match(/^\/api\/admin\/projects\/([a-zA-Z0-9_-]+)$/);
       if(adminProjectMatch && request.method==="PATCH"){
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);if(user.role!=="admin"&&user.role!=="moderator")return err("Forbidden",403);
         const body=await request.json().catch(()=>null);const status=body&&body.status;
@@ -211,7 +211,7 @@ export default {
         if(!result.meta.changes)return err("Project not found",404);
         return json({ok:true,status});
       }
-      const adminReportMatch=url.pathname.match(/^\\/api\\/admin\\/reports\\/([a-zA-Z0-9_-]+)$/);
+      const adminReportMatch=url.pathname.match(/^\/api\/admin\/reports\/([a-zA-Z0-9_-]+)$/);
       if(adminReportMatch && request.method==="PATCH"){
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);if(user.role!=="admin"&&user.role!=="moderator")return err("Forbidden",403);
         const body=await request.json().catch(()=>null);const status=body&&body.status;
