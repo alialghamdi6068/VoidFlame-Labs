@@ -127,8 +127,8 @@ export default {
         const category=(url.searchParams.get("category")||"").slice(0,40);
         const sort=url.searchParams.get("sort");
         const order=sort==="downloads"||sort==="popular"?"downloads DESC":sort==="updated"?"updated_at DESC":sort==="name"?"name COLLATE NOCASE ASC":"created_at DESC";
-        const limit=Math.min(48,Math.max(1,Number(url.searchParams.get("limit"))||24));
-        const offset=Math.max(0,Number(url.searchParams.get("offset"))||0);
+        const limit=Math.min(48,Math.max(1,Math.floor(Number(url.searchParams.get("limit"))||24)));
+        const offset=Math.min(100000,Math.max(0,Math.floor(Number(url.searchParams.get("offset"))||0)));
         let sql="SELECT p.id,p.slug,p.name,p.summary,p.category,p.icon_url,p.source_url,p.downloads,p.followers,p.created_at,p.updated_at,u.username AS author,(SELECT json_group_array(DISTINCT j.value) FROM versions v,json_each(v.game_versions) j WHERE v.project_id=p.id) AS supported_versions,(SELECT json_group_array(DISTINCT j.value) FROM versions v,json_each(v.loaders) j WHERE v.project_id=p.id) AS loaders FROM projects p JOIN users u ON u.id=p.owner_id WHERE p.status='approved'";
         const args=[];
         if(q){sql+=" AND (p.name LIKE ? OR p.summary LIKE ? OR p.description LIKE ? OR u.username LIKE ?)";args.push("%"+q+"%","%"+q+"%","%"+q+"%","%"+q+"%");}
@@ -285,6 +285,7 @@ export default {
         if(!["approved","rejected","archived"].includes(status))return err("Invalid project status");
         const result=await env.DB.prepare("UPDATE projects SET status=?,updated_at=datetime('now') WHERE id=?").bind(status,adminProjectMatch[1]).run();
         if(!result.meta.changes)return err("Project not found",404);
+        await env.DB.prepare("INSERT INTO audit_logs(id,actor_id,action,target_type,target_id,details) VALUES(?,?,?,?,?,?)").bind(id(),user.id,"project."+status,"project",adminProjectMatch[1],JSON.stringify({status})).run();
         return json({ok:true,status});
       }
       const adminReportMatch=url.pathname.match(/^\/api\/admin\/reports\/([a-zA-Z0-9_-]+)$/);
@@ -294,7 +295,29 @@ export default {
         if(!["reviewing","resolved","dismissed"].includes(status))return err("Invalid report status");
         const result=await env.DB.prepare("UPDATE reports SET status=? WHERE id=?").bind(status,adminReportMatch[1]).run();
         if(!result.meta.changes)return err("Report not found",404);
+        await env.DB.prepare("INSERT INTO audit_logs(id,actor_id,action,target_type,target_id,details) VALUES(?,?,?,?,?,?)").bind(id(),user.id,"report."+status,"report",adminReportMatch[1],JSON.stringify({status})).run();
         return json({ok:true,status});
+      }
+      if(url.pathname==="/api/admin/comments" && request.method==="GET"){
+        const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);if(user.role!=="admin"&&user.role!=="moderator")return err("Forbidden",403);
+        const status=["visible","hidden"].includes(url.searchParams.get("status"))?url.searchParams.get("status"):"visible";
+        const rows=await env.DB.prepare("SELECT c.id,c.body,c.status,c.created_at,u.username,p.name AS project_name FROM comments c JOIN users u ON u.id=c.user_id JOIN projects p ON p.id=c.project_id WHERE c.status=? ORDER BY c.created_at DESC LIMIT 100").bind(status).all();
+        return json({comments:rows.results||[]});
+      }
+      const adminCommentMatch=url.pathname.match(/^\/api\/admin\/comments\/([a-zA-Z0-9_-]+)$/);
+      if(adminCommentMatch && request.method==="PATCH"){
+        const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);if(user.role!=="admin"&&user.role!=="moderator")return err("Forbidden",403);
+        const body=await request.json().catch(()=>null);const status=body&&body.status;
+        if(!["visible","hidden"].includes(status))return err("Invalid comment status");
+        const result=await env.DB.prepare("UPDATE comments SET status=? WHERE id=?").bind(status,adminCommentMatch[1]).run();
+        if(!result.meta.changes)return err("Comment not found",404);
+        await env.DB.prepare("INSERT INTO audit_logs(id,actor_id,action,target_type,target_id,details) VALUES(?,?,?,?,?,?)").bind(id(),user.id,"comment."+status,"comment",adminCommentMatch[1],JSON.stringify({status})).run();
+        return json({ok:true,status});
+      }
+      if(url.pathname==="/api/admin/audit" && request.method==="GET"){
+        const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);if(user.role!=="admin")return err("Forbidden",403);
+        const rows=await env.DB.prepare("SELECT a.id,a.action,a.target_type,a.target_id,a.details,a.created_at,u.username AS actor FROM audit_logs a JOIN users u ON u.id=a.actor_id ORDER BY a.created_at DESC LIMIT 200").all();
+        return json({events:rows.results||[]});
       }
       if(url.pathname==="/api/admin/reports" && request.method==="GET"){
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);if(user.role!=="admin"&&user.role!=="moderator")return err("Forbidden",403);
