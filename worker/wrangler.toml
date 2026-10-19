@@ -17,6 +17,10 @@ migrations_dir = "migrations"
 binding = "FILES"
 bucket_name = "voidflame-labs-files"
 
+# Scheduled maintenance: remove expired sessions, stale rate-limit buckets and analytics older than 180 days.
+[triggers]
+crons = ["17 4 * * *"]
+
 # Cloudflare-native per-IP request limits. These execute before D1 work.
 # Pair with Cloudflare Security > WAF/rate-limiting rules for edge protection.
 [[ratelimits]]
