@@ -11,7 +11,7 @@ for migration in migrations:
 
 required = {
     "users", "sessions", "projects", "versions", "favorites", "follows",
-    "comments", "reports", "analytics_events", "rate_limits"
+    "comments", "reports", "analytics_events", "rate_limits", "audit_logs"
 }
 actual = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
 missing = required - actual
