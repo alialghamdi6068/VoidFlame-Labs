@@ -11,12 +11,18 @@ for migration in migrations:
 
 required = {
     "users", "sessions", "projects", "versions", "favorites", "follows",
-    "comments", "reports", "analytics_events", "rate_limits", "audit_logs"
+    "comments", "reports", "analytics_events", "rate_limits", "audit_logs", "project_media"
 }
 actual = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
 missing = required - actual
 if missing:
     raise SystemExit(f"Missing tables after migrations: {sorted(missing)}")
+project_columns = {row[1] for row in db.execute("PRAGMA table_info(projects)")}
+version_columns = {row[1] for row in db.execute("PRAGMA table_info(versions)")}
+if not {"requirements", "gallery"}.issubset(project_columns):
+    raise SystemExit("Project requirements/gallery columns are missing")
+if "dependencies" not in version_columns:
+    raise SystemExit("Version dependency column is missing")
 
 db.execute("INSERT INTO users(id,github_id,username) VALUES('u1','gh1','creator')")
 db.execute("INSERT INTO projects(id,slug,owner_id,name,summary,category) VALUES('p1','project-one','u1','Project One','A test summary','Mods')")
