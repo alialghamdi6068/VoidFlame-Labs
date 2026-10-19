@@ -183,7 +183,7 @@ export default {
       }
       if(url.pathname==="/api/developer/projects" && request.method==="GET"){
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
-        const projects=await env.DB.prepare("SELECT p.*, (SELECT COUNT(*) FROM versions v WHERE v.project_id=p.id) AS version_count FROM projects p WHERE p.owner_id=? ORDER BY p.updated_at DESC").bind(user.id).all();
+        const projects=await env.DB.prepare("SELECT p.*, (SELECT COUNT(*) FROM versions v WHERE v.project_id=p.id) AS version_count, (SELECT COUNT(*) FROM analytics_events a WHERE a.project_id=p.id AND a.event_type='view') AS view_count, (SELECT COUNT(*) FROM analytics_events a WHERE a.project_id=p.id AND a.event_type='download') AS tracked_downloads FROM projects p WHERE p.owner_id=? ORDER BY p.updated_at DESC").bind(user.id).all();
         return json({projects:projects.results||[]});
       }
       if(url.pathname==="/api/developer/projects" && request.method==="POST"){
