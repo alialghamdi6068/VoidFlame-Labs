@@ -42,6 +42,17 @@ function requireSameOrigin(request, env) {
 function slugify(value) {
   return value.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,70);
 }
+async function allowRate(request, env, action, max, windowSeconds=60, identity="anonymous") {
+  const ip=request.headers.get("CF-Connecting-IP")||"unknown";
+  const key=action+":"+identity+":"+ip;
+  const now=Math.floor(Date.now()/1000);
+  await env.DB.prepare(`INSERT INTO rate_limits(key,window_started,count) VALUES(?,?,1)
+    ON CONFLICT(key) DO UPDATE SET count=CASE WHEN excluded.window_started-rate_limits.window_started>=? THEN 1 ELSE rate_limits.count+1 END,
+    window_started=CASE WHEN excluded.window_started-rate_limits.window_started>=? THEN excluded.window_started ELSE rate_limits.window_started END`)
+    .bind(key,now,windowSeconds,windowSeconds).run();
+  const row=await env.DB.prepare("SELECT count FROM rate_limits WHERE key=?").bind(key).first();
+  return Number(row?.count||0)<=max;
+}
 async function githubFetch(url, token) {
   return fetch(url, {headers:{Authorization:`Bearer ${token}`,Accept:"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"}});
 }
@@ -143,6 +154,9 @@ export default {
         if(request.method==="GET" && action==="versions") return json({versions:(await env.DB.prepare("SELECT id,version_number,changelog,game_versions,loaders,channel,file_name,file_size,downloads,created_at FROM versions WHERE project_id=? ORDER BY created_at DESC").bind(project.id).all()).results||[]});
         if(request.method!=="POST")return err("Method not allowed",405);
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
+        const rateAction=action==="comments"?"comment":action==="report"?"report":action;
+        const maxRequests=action==="comments"?8:action==="report"?5:20;
+        if(!await allowRate(request,env,rateAction,maxRequests,60,user.id))return err("Rate limit exceeded. Try again shortly.",429);
         const body=await request.json().catch(()=>null);if(!body || typeof body!=="object")return err("Invalid JSON");
         if(action==="favorite" || action==="follow"){
           const table=action==="favorite"?"favorites":"follows";
@@ -170,6 +184,7 @@ export default {
       }
       if(url.pathname==="/api/developer/projects" && request.method==="POST"){
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
+        if(!await allowRate(request,env,"project-create",5,3600,user.id))return err("Project submission rate limit exceeded.",429);
         const body=await request.json().catch(()=>null);if(!body)return err("Invalid JSON");
         const name=String(body.name||"").trim().slice(0,80),summary=String(body.summary||"").trim().slice(0,180),description=String(body.description||"").trim().slice(0,20000),category=String(body.category||"").trim().slice(0,40);
         if(name.length<2||summary.length<10||!category)return err("Name, summary (10+ chars) and category are required");
@@ -181,6 +196,7 @@ export default {
       const uploadMatch=url.pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)\/upload$/);
       if(uploadMatch && request.method==="POST"){
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
+        if(!await allowRate(request,env,"upload",8,600,user.id))return err("Upload rate limit exceeded.",429);
         if(!env.FILES)return err("File storage is not configured",503);
         const project=await env.DB.prepare("SELECT id,owner_id FROM projects WHERE slug=?").bind(uploadMatch[1]).first();
         if(!project)return err("Project not found",404);if(project.owner_id!==user.id)return err("Forbidden",403);
@@ -198,6 +214,7 @@ export default {
       const developerVersionMatch=url.pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)\/versions$/);
       if(developerVersionMatch && request.method==="POST"){
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
+        if(!await allowRate(request,env,"version-publish",15,60,user.id))return err("Version publishing rate limit exceeded.",429);
         const project=await env.DB.prepare("SELECT id,owner_id FROM projects WHERE slug=?").bind(developerVersionMatch[1]).first();
         if(!project)return err("Project not found",404);if(project.owner_id!==user.id)return err("Forbidden",403);
         const body=await request.json().catch(()=>null);if(!body)return err("Invalid JSON");
