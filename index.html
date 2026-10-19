@@ -89,11 +89,12 @@ footer{border-color:#ffffff12;color:#9ba49e}.footer-brand{color:#e1e9e3}
 @media(max-width:720px){.nav{height:62px}.hero{padding:34px 0 20px}.hero-grid{grid-template-columns:1fr}.hero-art{min-height:270px}.core-card{width:240px}h1{font-size:46px;letter-spacing:-2.4px}.stats{margin-bottom:38px}.categories{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:38px}.project-grid{grid-template-columns:1fr}.project-banner{height:105px}.section{padding-bottom:42px}.cta{padding:22px}.navright{gap:7px}}
 
 </style>
+<script src="./config.js"></script>
 </head>
 <body>
 <header class="nav shell">
 <a class="brand" href="#" aria-label="VoidFlame Labs home"><span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 4h5l3 10 3-10h5l-6.1 16h-3.8L4 4Z" fill="currentColor"/><path d="m14.4 14.5 5.2-.1-4.2 5.6h-4.2l3.2-5.5Z" fill="#85f0d0"/></svg></span><span>VoidFlame <em>Labs</em></span></a>
-<nav class="navlinks" aria-label="Main navigation"><a class="active" href="#discover">Discover</a><a href="#projects" data-filter-link="Plugins">Plugins</a><a href="#projects" data-filter-link="Mods">Mods</a><a href="#projects" data-filter-link="Modpacks">Modpacks</a><a href="#projects" data-filter-link="Resource Packs">Resources</a></nav>
+<nav class="navlinks" aria-label="Main navigation"><a class="active" href="#discover">Discover</a><a href="#projects" data-filter-link="Plugins">Plugins</a><a href="#projects" data-filter-link="Mods">Mods</a><a href="#projects" data-filter-link="Modpacks">Modpacks</a><a href="#projects" data-filter-link="Resource Packs">Resources</a><a href="./developer.html">Studio</a></nav>
 <div class="navright"><label class="search-top"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input id="topSearch" placeholder="Search projects..." aria-label="Search projects"><span class="key">/</span></label><button class="btn" id="signinBtn">Sign in</button><button class="btn btn-primary" id="publishBtn">＋ Publish</button><button class="mobile-menu" id="mobileSearch" aria-label="Search">⌕</button></div>
 </header>
 <main class="shell">
@@ -177,7 +178,7 @@ async function loadGitHubCatalogue(){
 }
 document.getElementById('publishBtn').addEventListener('click',()=>openModal('Submit a project','<p class="modal-note">Project listings are stored in this GitHub repository. Submit your project for review; approved listings are added to the public catalogue by a maintainer.</p><a class="btn btn-primary" style="display:block;text-align:center" href="https://github.com/alialghamdi6068/VoidFlame-Labs/issues/new?template=project-submission.yml" target="_blank" rel="noopener noreferrer">Open project submission form ↗</a><p class="modal-note" style="margin-top:12px">Publish the downloadable files as a GitHub Release in your project repository, then include that release URL in your submission.</p>'));
 document.getElementById('ctaPublish').addEventListener('click',()=>document.getElementById('publishBtn').click());
-document.getElementById('signinBtn').addEventListener('click',()=>openModal('GitHub accounts','<p class="modal-note">VoidFlame Labs now uses GitHub as its catalogue and release source. Sign in to GitHub to submit a project or participate in repository reviews. The website does not store a separate password or account database.</p><a class="btn btn-primary" style="display:block;text-align:center" href="https://github.com/login" target="_blank" rel="noopener noreferrer">Sign in to GitHub ↗</a>'));
+document.getElementById('signinBtn').addEventListener('click',()=>{const apiBase=(window.VOIDFLAME_CONFIG?.apiBaseUrl||'').replace(/\/$/,'');const signInUrl=apiBase?apiBase+'/api/auth/github':'https://github.com/login';openModal('GitHub accounts','<p class="modal-note">Use GitHub to sign in. Full website sessions are available after the site API is configured by the maintainer.</p><a class="btn btn-primary" style="display:block;text-align:center" href="'+signInUrl+'" target="_blank" rel="noopener noreferrer">Sign in with GitHub ↗</a>')});
 document.addEventListener('click',event=>{
   const card=event.target.closest('[data-project]');if(!card)return;
   const project=projects.find(item=>item.id===card.dataset.project);if(!project)return;
