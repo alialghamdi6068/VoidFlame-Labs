@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS projects (
   name TEXT NOT NULL,
   summary TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
+  requirements TEXT NOT NULL DEFAULT '',
+  gallery TEXT NOT NULL DEFAULT '[]',
   category TEXT NOT NULL,
   source_url TEXT,
   icon_url TEXT,
@@ -36,6 +38,7 @@ CREATE TABLE IF NOT EXISTS versions (
   changelog TEXT NOT NULL DEFAULT '',
   game_versions TEXT NOT NULL DEFAULT '[]',
   loaders TEXT NOT NULL DEFAULT '[]',
+  dependencies TEXT NOT NULL DEFAULT '[]',
   channel TEXT NOT NULL DEFAULT 'release' CHECK (channel IN ('release','beta','alpha')),
   file_key TEXT,
   file_name TEXT,
@@ -118,3 +121,15 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS project_media (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  file_key TEXT NOT NULL UNIQUE,
+  file_name TEXT NOT NULL,
+  content_type TEXT NOT NULL,
+  file_size INTEGER NOT NULL,
+  alt TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_project_media_project_created ON project_media(project_id,created_at DESC);
