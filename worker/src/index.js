@@ -13,8 +13,8 @@ const safeEqual = (a, b) => {
   let out = 0; for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return out === 0;
 };
-const cookie = (name, value, extra = "") => `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000${extra}`;
-const clearCookie = "vf_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0";
+const cookie = (name, value, extra = "") => `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=2592000${extra}`;
+const clearCookie = "vf_session=; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=0";
 async function sign(value, secret) {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), {name:"HMAC",hash:"SHA-256"}, false, ["sign"]);
   const bytes = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value)));
@@ -178,23 +178,62 @@ export default {
         await env.DB.prepare("INSERT INTO projects(id,slug,owner_id,name,summary,description,category,source_url,status) VALUES(?,?,?,?,?,?,?,?, 'pending')").bind(projectId,slug,user.id,name,summary,description,category,body.source_url?String(body.source_url).slice(0,500):null).run();
         return json({ok:true,id:projectId,slug,status:"pending"},201);
       }
+      const uploadMatch=url.pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)\/upload$/);
+      if(uploadMatch && request.method==="POST"){
+        const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
+        if(!env.FILES)return err("File storage is not configured",503);
+        const project=await env.DB.prepare("SELECT id,owner_id FROM projects WHERE slug=?").bind(uploadMatch[1]).first();
+        if(!project)return err("Project not found",404);if(project.owner_id!==user.id)return err("Forbidden",403);
+        const length=Number(request.headers.get("content-length")||0);if(length>52*1024*1024)return err("Upload exceeds 50 MB limit",413);
+        const form=await request.formData();const file=form.get("file");
+        if(!file||typeof file.arrayBuffer!=="function"||!file.size)return err("A release file is required");
+        if(file.size>50*1024*1024)return err("Upload exceeds 50 MB limit",413);
+        const filename=String(file.name||"release.bin").replace(/[^a-zA-Z0-9._-]/g,"_").slice(-120);
+        const ext=filename.toLowerCase().split(".").pop();
+        if(!["jar","zip","mrpack","jar.disabled","7z"].includes(ext))return err("Unsupported file type. Allowed: .jar, .zip, .mrpack, .7z",415);
+        const key=project.id+"/"+id()+"/"+filename;
+        await env.FILES.put(key,file.stream(),{httpMetadata:{contentType:"application/octet-stream"},customMetadata:{projectId:project.id,ownerId:user.id,originalName:filename}});
+        return json({ok:true,file_key:key,file_name:filename,file_size:file.size},201);
+      }
       const developerVersionMatch=url.pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)\/versions$/);
       if(developerVersionMatch && request.method==="POST"){
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
         const project=await env.DB.prepare("SELECT id,owner_id FROM projects WHERE slug=?").bind(developerVersionMatch[1]).first();
         if(!project)return err("Project not found",404);if(project.owner_id!==user.id)return err("Forbidden",403);
         const body=await request.json().catch(()=>null);if(!body)return err("Invalid JSON");
-        const version=String(body.version_number||"").trim().slice(0,40);
-        const release=String(body.release_url||"").trim();
-        if(!version)return err("Version number is required");
-        try{const u=new URL(release);if(u.protocol!=="https:"||u.hostname!=="github.com")return err("Release URL must point to github.com")}catch{return err("Valid GitHub release URL is required")}
+        const version=String(body.version_number||"").trim().slice(0,40);if(!version)return err("Version number is required");
+        const fileKey=String(body.file_key||"");
+        let fileName=null,fileSize=0;
+        if(fileKey){
+          if(!env.FILES||!fileKey.startsWith(project.id+"/")||fileKey.includes(".."))return err("Invalid uploaded file reference",400);
+          const object=await env.FILES.head(fileKey);if(!object)return err("Uploaded file not found",404);
+          fileName=object.customMetadata?.originalName||fileKey.split("/").pop();fileSize=object.size;
+        }
+        let release=null;
+        if(body.release_url){try{const u=new URL(String(body.release_url));if(u.protocol!=="https:"||u.hostname!=="github.com")return err("Release URL must point to github.com");release=u.href}catch{return err("Valid GitHub release URL is required")}}
+        if(!fileKey&&!release)return err("Upload a release file or provide a GitHub release URL");
         const channel=["release","beta","alpha"].includes(body.channel)?body.channel:"release";
         const gameVersions=Array.isArray(body.game_versions)?body.game_versions.filter(x=>typeof x==="string").slice(0,30):[];
         const loaders=Array.isArray(body.loaders)?body.loaders.filter(x=>typeof x==="string").slice(0,15):[];
         const versionId=id();
-        await env.DB.prepare("INSERT INTO versions(id,project_id,version_number,changelog,game_versions,loaders,channel,release_url) VALUES(?,?,?,?,?,?,?,?)").bind(versionId,project.id,version,String(body.changelog||"").slice(0,10000),JSON.stringify(gameVersions),JSON.stringify(loaders),channel,release).run();
+        await env.DB.prepare("INSERT INTO versions(id,project_id,version_number,changelog,game_versions,loaders,channel,file_key,file_name,file_size,release_url) VALUES(?,?,?,?,?,?,?,?,?,?,?)").bind(versionId,project.id,version,String(body.changelog||"").slice(0,10000),JSON.stringify(gameVersions),JSON.stringify(loaders),channel,fileKey||null,fileName,fileSize,release).run();
         await env.DB.prepare("UPDATE projects SET updated_at=datetime('now') WHERE id=?").bind(project.id).run();
         return json({ok:true,id:versionId},201);
+      }
+      const downloadMatch=url.pathname.match(/^\/api\/versions\/([a-zA-Z0-9_-]+)\/download$/);
+      if(downloadMatch && request.method==="GET"){
+        if(!env.FILES)return err("File storage is not configured",503);
+        const v=await env.DB.prepare("SELECT v.id,v.project_id,v.file_key,v.file_name,p.status FROM versions v JOIN projects p ON p.id=v.project_id WHERE v.id=?").bind(downloadMatch[1]).first();
+        if(!v||v.status!=="approved")return err("Version not found",404);
+        if(!v.file_key)return err("This version is hosted externally",404);
+        const object=await env.FILES.get(v.file_key);if(!object)return err("Release file is missing",404);
+        await env.DB.batch([
+          env.DB.prepare("UPDATE versions SET downloads=downloads+1 WHERE id=?").bind(v.id),
+          env.DB.prepare("UPDATE projects SET downloads=downloads+1 WHERE id=?").bind(v.project_id),
+          env.DB.prepare("INSERT INTO analytics_events(id,project_id,event_type) VALUES(?,?,'download')").bind(id(),v.project_id)
+        ]);
+        const filename=String(v.file_name||"download.bin").replace(/["\\\r\n]/g,"_");
+        return new Response(object.body,{headers:{"content-type":"application/octet-stream","content-length":String(object.size),"content-disposition":'attachment; filename="'+filename+'"',"cache-control":"no-store","x-content-type-options":"nosniff"}});
       }
       if(url.pathname==="/api/admin/projects" && request.method==="GET"){
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);if(user.role!=="admin"&&user.role!=="moderator")return err("Forbidden",403);
