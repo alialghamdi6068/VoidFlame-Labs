@@ -40,6 +40,8 @@ jobs:
         run: python3 worker/tests/test_schema.py
       - name: Check security contracts
         run: python3 worker/tests/test_security_contract.py
+      - name: Check frontend privacy contracts
+        run: python3 worker/tests/test_frontend_contract.py
       - name: Check JavaScript syntax
         run: |
           python3 - <<'PY'
