@@ -406,6 +406,22 @@ export default {
         const filename=String(v.file_name||"download.bin").replace(/["\\\r\n]/g,"_");
         return new Response(object.body,{headers:{"content-type":"application/octet-stream","content-length":String(object.size),"content-disposition":'attachment; filename="'+filename+'"',"cache-control":"no-store","x-content-type-options":"nosniff"}});
       }
+      if(url.pathname==="/api/admin/versions" && request.method==="GET"){
+        const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);if(user.role!=="admin"&&user.role!=="moderator")return err("Forbidden",403);
+        const status=["pending","approved","rejected"].includes(url.searchParams.get("status"))?url.searchParams.get("status"):"pending";
+        const rows=await env.DB.prepare("SELECT v.id,v.project_id,v.version_number,v.channel,v.file_name,v.file_size,v.release_url,v.status,v.created_at,p.name AS project_name,p.slug AS project_slug,u.username AS author FROM versions v JOIN projects p ON p.id=v.project_id JOIN users u ON u.id=p.owner_id WHERE v.status=? ORDER BY v.created_at ASC LIMIT 100").bind(status).all();
+        return json({versions:rows.results||[]});
+      }
+      const adminVersionMatch=url.pathname.match(/^\\/api\\/admin\\/versions\\/([a-zA-Z0-9_-]+)$/);
+      if(adminVersionMatch && request.method==="PATCH"){
+        const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);if(user.role!=="admin"&&user.role!=="moderator")return err("Forbidden",403);
+        const body=await request.json().catch(()=>null);const status=body&&body.status;
+        if(!["approved","rejected"].includes(status))return err("Invalid version status");
+        const result=await env.DB.prepare("UPDATE versions SET status=? WHERE id=?").bind(status,adminVersionMatch[1]).run();
+        if(!result.meta.changes)return err("Version not found",404);
+        await env.DB.prepare("INSERT INTO audit_logs(id,actor_id,action,target_type,target_id,details) VALUES(?,?,?,?,?,?)").bind(id(),user.id,"version."+status,"version",adminVersionMatch[1],JSON.stringify({status})).run();
+        return json({ok:true,status});
+      }
       if(url.pathname==="/api/admin/projects" && request.method==="GET"){
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);if(user.role!=="admin"&&user.role!=="moderator")return err("Forbidden",403);
         const status=["pending","approved","rejected","archived"].includes(url.searchParams.get("status"))?url.searchParams.get("status"):"pending";
