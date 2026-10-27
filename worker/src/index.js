@@ -42,6 +42,16 @@ function requireSameOrigin(request, env) {
 function slugify(value) {
   return value.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,70);
 }
+const PROJECT_CATEGORIES = new Set(["Mods","Plugins","Modpacks","Shaders","Resource Packs","Tools","Other"]);
+function configuredApiOrigin(env) {
+  const value = String(env.API_URL || "").trim();
+  if (!value || value.includes("REPLACE_WITH")) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) return null;
+    return parsed.origin;
+  } catch { return null; }
+}
 async function allowRate(request, env, action, max, windowSeconds=60, identity="anonymous") {
   const ip=request.headers.get("CF-Connecting-IP")||"unknown";
   const key=action+":"+identity+":"+ip;
@@ -112,14 +122,19 @@ export default {
     if (contentLength > (isUploadRequest ? 52*1024*1024 : 1024*1024)) return err(isUploadRequest ? "Upload request exceeds the 50 MB limit." : "Request body is too large.",413);
     if (!requireSameOrigin(request, env)) return err("Origin not allowed",403);
     try {
+      if (url.pathname === "/api/health" && request.method === "GET") {
+        if (!env.DB) return err("Service unavailable",503);
+        try { await env.DB.prepare("SELECT 1 AS ok").first(); return json({status:"ok"}); }
+        catch { return err("Service unavailable",503); }
+      }
       // GitHub OAuth: state is signed and stored in a short-lived HttpOnly cookie.
       if (url.pathname === "/api/auth/github" && request.method === "GET") {
-        if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET || !env.SESSION_SECRET) return err("Authentication is not configured yet",503);
+        if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET || !env.SESSION_SECRET || !configuredApiOrigin(env)) return err("Authentication is not configured yet",503);
         const state = id();
         const sig = await sign(state, env.SESSION_SECRET);
         const redirect = new URL("https://github.com/login/oauth/authorize");
         redirect.searchParams.set("client_id",env.GITHUB_CLIENT_ID);
-        redirect.searchParams.set("redirect_uri",new URL("/api/auth/callback",env.API_URL || env.SITE_URL).toString());
+        redirect.searchParams.set("redirect_uri",new URL("/api/auth/callback",configuredApiOrigin(env)).toString());
         redirect.searchParams.set("scope","read:user");
         redirect.searchParams.set("state",state);
         const response = new Response(null,{status:302,headers:{location:redirect.toString()}});
@@ -211,7 +226,7 @@ export default {
         const project=await env.DB.prepare("SELECT p.*,u.username AS author,u.avatar_url AS author_avatar FROM projects p JOIN users u ON u.id=p.owner_id WHERE p.slug=? AND p.status='approved'").bind(projectMatch[1]).first();
         if(!project)return err("Project not found",404);
         if(await allowRate(request,env,"view",1,60,project.id))await env.DB.prepare("INSERT INTO analytics_events(id,project_id,event_type) VALUES(?,?,'view')").bind(id(),project.id).run();
-        const versions=await env.DB.prepare("SELECT id,version_number,changelog,game_versions,loaders,dependencies,channel,file_name,file_size,release_url,downloads,created_at FROM versions WHERE project_id=? ORDER BY created_at DESC").bind(project.id).all();
+        const versions=await env.DB.prepare("SELECT id,version_number,changelog,game_versions,loaders,dependencies,channel,file_name,file_size,release_url,downloads,created_at FROM versions WHERE project_id=? AND status='approved' ORDER BY created_at DESC").bind(project.id).all();
         const comments=await env.DB.prepare("SELECT c.id,c.body,c.created_at,u.username,u.avatar_url FROM comments c JOIN users u ON u.id=c.user_id WHERE c.project_id=? AND c.status='visible' ORDER BY c.created_at DESC LIMIT 100").bind(project.id).all();
         const media=await env.DB.prepare("SELECT id,alt,content_type FROM project_media WHERE project_id=? ORDER BY created_at DESC LIMIT 40").bind(project.id).all();
         project.gallery=(media.results||[]).map(m=>({url:new URL("/api/media/"+m.id,env.API_URL||request.url).toString(),alt:m.alt||project.name,type:m.content_type.startsWith("video/")?"video":"image"}));
@@ -222,7 +237,7 @@ export default {
         const [,slug,action]=projectSub;
         const project=await env.DB.prepare("SELECT id,owner_id FROM projects WHERE slug=? AND status='approved'").bind(slug).first();
         if(!project)return err("Project not found",404);
-        if(request.method==="GET" && action==="versions") return json({versions:(await env.DB.prepare("SELECT id,version_number,changelog,game_versions,loaders,dependencies,channel,file_name,file_size,downloads,created_at FROM versions WHERE project_id=? ORDER BY created_at DESC").bind(project.id).all()).results||[]});
+        if(request.method==="GET" && action==="versions") return json({versions:(await env.DB.prepare("SELECT id,version_number,changelog,game_versions,loaders,dependencies,channel,file_name,file_size,downloads,created_at FROM versions WHERE project_id=? AND status='approved' ORDER BY created_at DESC").bind(project.id).all()).results||[]});
         if(request.method!=="POST")return err("Method not allowed",405);
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);
         const rateAction=action==="comments"?"comment":action==="report"?"report":action;
@@ -274,7 +289,7 @@ export default {
         if(!await allowRate(request,env,"project-create",5,3600,user.id))return err("Project submission rate limit exceeded.",429);
         const body=await request.json().catch(()=>null);if(!body)return err("Invalid JSON");
         const name=String(body.name||"").trim().slice(0,80),summary=String(body.summary||"").trim().slice(0,180),description=String(body.description||"").trim().slice(0,20000),requirements=String(body.requirements||"").trim().slice(0,5000),category=String(body.category||"").trim().slice(0,40);
-        if(name.length<2||summary.length<10||!category)return err("Name, summary (10+ chars) and category are required");
+        if(name.length<2||summary.length<10||!PROJECT_CATEGORIES.has(category))return err("Name, summary (10+ chars), and a supported category are required");
         let source=null;
         if(body.source_url){try{const u=new URL(String(body.source_url));if(u.protocol!=="https:"||u.hostname!=="github.com")return err("Source URL must point to github.com");source=u.href}catch{return err("Valid GitHub source URL is required")}}
         const slug=slugify(name)+"-"+id().slice(0,8);
@@ -290,7 +305,7 @@ export default {
         if(!project)return err("Project not found",404);if(project.owner_id!==user.id)return err("Forbidden",403);
         const body=await request.json().catch(()=>null);if(!body||typeof body!=="object")return err("Invalid JSON");
         const name=String(body.name||"").trim().slice(0,80),summary=String(body.summary||"").trim().slice(0,180),description=String(body.description||"").trim().slice(0,20000),requirements=String(body.requirements||"").trim().slice(0,5000),category=String(body.category||"").trim().slice(0,40);
-        if(name.length<2||summary.length<10||!category)return err("Name, summary (10+ chars) and category are required");
+        if(name.length<2||summary.length<10||!PROJECT_CATEGORIES.has(category))return err("Name, summary (10+ chars), and a supported category are required");
         let source=null;if(body.source_url){try{const u=new URL(String(body.source_url));if(u.protocol!=="https:"||u.hostname!=="github.com")return err("Source URL must point to github.com");source=u.href}catch{return err("Valid GitHub source URL is required")}}
         await env.DB.prepare("UPDATE projects SET name=?,summary=?,description=?,requirements=?,category=?,source_url=?,status='pending',updated_at=datetime('now') WHERE id=?").bind(name,summary,description,requirements,category,source,project.id).run();
         return json({ok:true,slug:developerProjectMatch[1],status:"pending"});
