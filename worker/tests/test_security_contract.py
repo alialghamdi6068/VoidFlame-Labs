@@ -16,6 +16,11 @@ checks = {
     "API errors do not expose exception details": 'return json({error:"Internal server error" },500);' in source,
     "scheduled cleanup removes expired sessions": "DELETE FROM sessions WHERE expires_at <= datetime('now')" in source,
     "scheduled cleanup has analytics retention": "DELETE FROM analytics_events WHERE created_at < datetime('now','-180 days')" in source,
+    "health endpoint returns generic readiness": 'url.pathname === "/api/health"' in source and 'return err("Service unavailable",503)' in source,
+    "OAuth refuses missing or placeholder API origin": '!configuredApiOrigin(env)' in source and 'value.includes("REPLACE_WITH")' in source,
+    "public project details expose approved versions only": "FROM versions WHERE project_id=? AND status='approved'" in source,
+    "public versions endpoint filters unapproved releases": 'action==="versions"' in source and "project_id=? AND status='approved'" in source,
+    "project categories use an allowlist": 'PROJECT_CATEGORIES.has(category)' in source,
 }
 
 failed = [name for name, ok in checks.items() if not ok]
