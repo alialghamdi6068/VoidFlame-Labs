@@ -22,6 +22,9 @@ checks = {
     "public versions endpoint filters unapproved releases": 'action==="versions"' in source and "project_id=? AND status='approved'" in source,
     "public catalogue compatibility filters exclude pending versions": "v.project_id=p.id AND v.status='approved'" in source,
     "project categories use an allowlist": 'PROJECT_CATEGORIES.has(category)' in source,
+    "release moderation requires staff role": 'url.pathname==="/api/admin/versions"' in source and 'user.role!=="admin"&&user.role!=="moderator"' in source,
+    "release moderation accepts only approved or rejected": '!["approved","rejected"].includes(status)' in source,
+    "release moderation is audited": '"version."+status,"version",adminVersionMatch[1]' in source,
 }
 
 failed = [name for name, ok in checks.items() if not ok]
