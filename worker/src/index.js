@@ -412,7 +412,7 @@ export default {
         const rows=await env.DB.prepare("SELECT v.id,v.project_id,v.version_number,v.channel,v.file_name,v.file_size,v.release_url,v.status,v.created_at,p.name AS project_name,p.slug AS project_slug,u.username AS author FROM versions v JOIN projects p ON p.id=v.project_id JOIN users u ON u.id=p.owner_id WHERE v.status=? ORDER BY v.created_at ASC LIMIT 100").bind(status).all();
         return json({versions:rows.results||[]});
       }
-      const adminVersionMatch=url.pathname.match(/^\\/api\\/admin\\/versions\\/([a-zA-Z0-9_-]+)$/);
+      const adminVersionMatch=url.pathname.match(/^\/api\/admin\/versions\/([a-zA-Z0-9_-]+)$/);
       if(adminVersionMatch && request.method==="PATCH"){
         const user=await sessionUser(request,env);if(!user)return err("Sign in required",401);if(user.role!=="admin"&&user.role!=="moderator")return err("Forbidden",403);
         const body=await request.json().catch(()=>null);const status=body&&body.status;
