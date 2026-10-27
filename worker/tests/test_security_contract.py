@@ -20,6 +20,7 @@ checks = {
     "OAuth refuses missing or placeholder API origin": '!configuredApiOrigin(env)' in source and 'value.includes("REPLACE_WITH")' in source,
     "public project details expose approved versions only": "FROM versions WHERE project_id=? AND status='approved'" in source,
     "public versions endpoint filters unapproved releases": 'action==="versions"' in source and "project_id=? AND status='approved'" in source,
+    "public catalogue compatibility filters exclude pending versions": "v.project_id=p.id AND v.status='approved'" in source,
     "project categories use an allowlist": 'PROJECT_CATEGORIES.has(category)' in source,
 }
 
