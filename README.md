@@ -1,50 +1,35 @@
 # VoidFlame Labs
 
-VoidFlame Labs is a static Minecraft creator marketplace. **GitHub is the source of truth for the public project catalogue and release files; Supabase is not required to publish or display listings.**
+VoidFlame Labs is a Minecraft project discovery and publishing platform for mods, plugins, modpacks, shaders, resource packs, and tools.
 
-## Where data lives
+## Architecture
 
-- `data/projects.json` — public catalogue. Only reviewed/approved projects belong here.
-- GitHub Releases in each project's own repository — release binaries and version tags.
-- GitHub Issues — project submission requests and moderation discussion.
-- `.github/ISSUE_TEMPLATE/project-submission.yml` — structured submission form.
-- GitHub Actions + GitHub Pages — validates the catalogue and deploys the site on pushes to `main`.
+- **Frontend:** static HTML/CSS/JavaScript hosted on GitHub Pages.
+- **Public catalogue:** `data/projects.json` is the reviewed fallback catalogue; the homepage can display it without a backend.
+- **Dynamic features:** project detail, profiles, developer studio, moderation, sign-in, comments, favorites, follows, releases, and media use the Cloudflare Worker API.
+- **Database:** Cloudflare D1, with versioned SQL migrations under `worker/migrations/`.
+- **Files:** Cloudflare R2. Uploaded releases and media are not stored in Git.
+- **Authentication:** GitHub OAuth with signed, server-side sessions. Secrets belong only in Worker secrets, never in frontend files.
+- **CI:** GitHub Actions validates catalogue data, database migrations, JavaScript syntax, security contracts, and deploys GitHub Pages. CodeQL analyzes JavaScript/TypeScript; Dependabot checks GitHub Actions dependencies.
 
-## Add or update a project
+## Deployment
 
-1. The creator publishes downloadable files as a GitHub Release in their own repository.
-2. Submit a project using **Issues → Submit a project**, providing the source repository and release URL.
-3. A maintainer reviews the issue, confirms the links and compatibility, and adds the approved listing to `data/projects.json`.
-4. Commit the catalogue update to `main`. GitHub Actions validates the JSON and deploys the site.
+Follow [SETUP.md](SETUP.md) for first-time setup and [worker/SECURITY-OPERATIONS.md](worker/SECURITY-OPERATIONS.md) for privacy, backup, recovery, and security operations.
 
-Example catalogue entry:
+Before the Worker is deployed and configured, the homepage's static catalogue remains available but account-dependent pages and actions are unavailable. Set the public `apiBaseUrl` in `config.js` only after the deployed API passes its health check.
 
-```json
-{
-  "slug": "example-plugin",
-  "name": "Example Plugin",
-  "author": "Creator",
-  "category": "Plugins",
-  "summary": "A short description of the plugin.",
-  "description": "Full description, setup instructions, and known limitations.",
-  "version": "1.0.0",
-  "supportedVersions": ["1.21.4"],
-  "sourceUrl": "https://github.com/creator/example-plugin",
-  "releaseUrl": "https://github.com/creator/example-plugin/releases/tag/1.0.0",
-  "downloads": 0,
-  "icon": "✦",
-  "color": "#a8e6bd"
-}
-```
+## Data and privacy
 
-## Deploy
+- Authenticated users can export their account data at `GET /api/me/export`.
+- Users can review their active sessions at `GET /api/me/sessions` and revoke other sessions with `DELETE /api/me/sessions`.
+- Scheduled cleanup removes expired sessions, stale rate-limit records, and analytics older than 180 days; it does not remove user content or audit history.
+- Release/media uploads check allowed extensions, size, and file signatures. This rejects obvious mismatches but **is not malware scanning**. Do not accept public uploads at scale until a scanner/quarantine workflow is integrated with this Worker backend.
+- D1 and R2 provisioning, secrets, OAuth registration, automatic off-account backups, and restore drills require real account setup; a successful CI run does not prove those operations work.
 
-1. Open **Settings → Pages** and set the source to **GitHub Actions**.
-2. Push changes to `main`, or run **Deploy VoidFlame Labs** manually from the Actions tab.
-3. No Supabase URL, API key, database project, or frontend secret is required.
+## Legacy components
 
-## Security and limitations
+The `supabase/` SQL files and `scanner/` service describe an earlier/alternate Supabase-based backend. They are **not connected to the active Cloudflare Worker frontend flow**. Do not run the Supabase scanner against production or place its service-role key in browser code. Migration/integration must be a deliberate project change, not a second parallel source of truth.
 
-The website is a static GitHub Pages site. It does not expose a GitHub write token in browser code. Project catalogue edits are made through reviewed repository commits; release binaries stay in GitHub Releases. This design does not provide a separate website password database, private user profiles, or in-site upload of arbitrary files. GitHub account authentication and repository permissions govern submissions and maintainer changes.
+## Project review
 
-Legacy Supabase migration files, if present in this repository, are not used by the current website.
+Creators submit projects through the developer studio after the API is configured. New projects and versions remain pending until reviewed. Only approved projects and approved versions should be visible to public browsing/download endpoints.
