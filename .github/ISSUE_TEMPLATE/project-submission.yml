@@ -1,11 +1,11 @@
 name: Submit a project
-description: Submit a Minecraft project for review and listing on VoidFlame Labs.
+description: Submit a Minecraft project for review and listing on Ali Labs.
 title: "[Project submission]: "
 body:
   - type: markdown
     attributes:
       value: |
-        Submissions are reviewed by the VoidFlame Labs maintainers. Upload release files to a GitHub Release first and provide its URL below. Do not attach private credentials or secrets.
+        Submissions are reviewed by the Ali Labs maintainers. Upload release files to a GitHub Release first and provide its URL below. Do not attach private credentials or secrets.
   - type: input
     id: project_name
     attributes:
