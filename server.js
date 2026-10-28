@@ -50,7 +50,7 @@ function arrayStrings(v,maxItems,maxLen) {
   return Array.isArray(v) ? v.filter(function(x){return typeof x==='string';}).slice(0,maxItems).map(function(x){return text(x,maxLen);}) : [];
 }
 function emptyStore() {
-  return {schemaVersion:1,users:[],sessions:[],projects:[],versions:[],comments:[],reports:[],audit:[],analytics:[],rateLimits:[]};
+  return {schemaVersion:1,users:[],sessions:[],projects:[],versions:[],comments:[],reports:[],audit:[],analytics:[],rateLimits:[],uploads:[],media:[]};
 }
 let store=emptyStore();
 let writeQueue=Promise.resolve();
@@ -140,6 +140,8 @@ function signatureOK(buf,ext) {
   if(ext==='png')return buf.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
   if(ext==='jpg'||ext==='jpeg')return buf[0]===255&&buf[1]===216&&buf[2]===255;
   if(ext==='webp')return buf.toString('ascii',0,4)==='RIFF'&&buf.toString('ascii',8,12)==='WEBP';
+  if(ext==='mp4')return buf.length>=8&&buf.toString('ascii',4,8)==='ftyp';
+  if(ext==='webm')return buf.subarray(0,4).equals(Buffer.from([0x1a,0x45,0xdf,0xa3]));
   return false;
 }
 async function upload(req,res,user,project,kind) {
@@ -153,13 +155,19 @@ async function upload(req,res,user,project,kind) {
   if(!part||!part.filename)return fail(res,400,'Select a file');
   if(part.data.length>MAX_UPLOAD)return fail(res,413,'File exceeds 100 MB limit');
   const ext=path.extname(part.filename).slice(1).toLowerCase();
-  const allowed=kind==='release'?['jar','zip','mrpack','7z']:['png','jpg','jpeg','webp'];
+  const allowed=kind==='release'?['jar','zip','mrpack','7z']:['png','jpg','jpeg','webp','mp4','webm'];
   if(!allowed.includes(ext)||!signatureOK(part.data.subarray(0,16),ext))return fail(res,400,'File type or file signature is not allowed');
   const key=id()+'-'+fileNameSafe(part.filename);
+  if(kind==='media'){
+    await fs.writeFile(path.join(UPLOAD_DIR,key),part.data,{flag:'wx',mode:0o600});
+    const media={id:id(),key:key,project_id:project.id,owner_id:user.id,file_name:fileNameSafe(part.filename),file_size:part.data.length,content_type:ext==='png'?'image/png':(ext==='webp'?'image/webp':(ext==='mp4'?'video/mp4':(ext==='webm'?'video/webm':'image/jpeg'))),alt:text((parts.find(function(p){return p.name==='alt';})||{}).data?.toString('utf8'),250),created_at:new Date().toISOString()};
+    store.media.push(media); saveAudit(user.id,'media.uploaded','media',media.id,{file_size:media.file_size}); await persist();
+    return json(res,201,{ok:true,id:media.id,url:'/api/media/'+media.id});
+  }
   await fs.writeFile(path.join(QUARANTINE_DIR,key),part.data,{flag:'wx',mode:0o600});
-  const v={id:id(),project_id:project.id,version_number:'upload-'+Date.now(),changelog:'',game_versions:[],loaders:[],dependencies:[],channel:'release',file_key:key,file_name:fileNameSafe(part.filename),file_size:part.data.length,release_url:null,status:'pending',downloads:0,created_at:new Date().toISOString(),uploaded_by:user.id,scan_status:'quarantined'};
-  store.versions.push(v); project.updated_at=new Date().toISOString(); saveAudit(user.id,'upload.quarantined','version',v.id,{file_size:v.file_size});
-  await persist(); return json(res,201,{ok:true,id:v.id,status:'pending',message:'Uploaded to quarantine; release requires review.'});
+  const pending={key:key,project_id:project.id,owner_id:user.id,file_name:fileNameSafe(part.filename),file_size:part.data.length,created_at:new Date().toISOString(),scan_status:'quarantined'};
+  store.uploads.push(pending); saveAudit(user.id,'upload.quarantined','upload',key,{file_size:pending.file_size});
+  await persist(); return json(res,201,{ok:true,file_key:key,file_name:pending.file_name,file_size:pending.file_size,status:'pending',message:'Uploaded to quarantine; release requires review.'});
 }
 async function bodyRaw(req,limit) {
   const chunks=[];let size=0;
@@ -257,16 +265,18 @@ async function handle(req,res) {
   if(pathname==='/api/developer/projects'&&req.method==='GET'){const user=requireUser(req,res);if(!user)return;return json(res,200,{projects:store.projects.filter(function(p){return p.owner_id===user.id;})});}
   if(pathname==='/api/developer/projects'&&req.method==='POST'){
     const user=requireUser(req,res);if(!user)return;const b=await body(req);const name=text(b.name,100);if(name.length<2)return fail(res,400,'Project name must be at least 2 characters');
-    const slug=slugify(name)+'-'+crypto.randomBytes(3).toString('hex');const p={id:id(),owner_id:user.id,name,slug,summary:text(b.summary,240),description:text(b.description,10000),category:['Mods','Plugins','Modpacks','Shaders','Resource Packs','Tools','Other'].includes(b.category)?b.category:'Other',icon_url:'',status:'pending',downloads:0,created_at:new Date().toISOString(),updated_at:new Date().toISOString(),favorites:[],followers:[]};store.projects.push(p);saveAudit(user.id,'project.created','project',p.id,{});await persist();return json(res,201,{project:p});
+    const slug=slugify(name)+'-'+crypto.randomBytes(3).toString('hex');const p={id:id(),owner_id:user.id,name,slug,summary:text(b.summary,240),description:text(b.description,10000),category:['Mods','Plugins','Modpacks','Shaders','Resource Packs','Tools','Other'].includes(b.category)?b.category:'Other',icon_url:'',status:'pending',downloads:0,created_at:new Date().toISOString(),updated_at:new Date().toISOString(),favorites:[],followers:[]};store.projects.push(p);saveAudit(user.id,'project.created','project',p.id,{});await persist();return json(res,201,{project:p,slug:p.slug});
   }
   m=pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)$/);
-  if(m&&req.method==='PATCH'){const user=requireUser(req,res);if(!user)return;const p=store.projects.find(function(x){return x.slug===m[1]||x.id===m[1];});if(!p)return fail(res,404,'Project not found');if(p.owner_id!==user.id&&user.role!=='admin')return fail(res,403,'Forbidden');const b=await body(req);for(const k of ['name','summary','description','icon_url'])if(b[k]!==undefined)p[k]=text(b[k],k==='description'?10000:500);if(b.category)p.category=['Mods','Plugins','Modpacks','Shaders','Resource Packs','Tools','Other'].includes(b.category)?b.category:p.category;p.updated_at=new Date().toISOString();await persist();return json(res,200,{project:p});}
+  if(m&&req.method==='PATCH'){const user=requireUser(req,res);if(!user)return;const p=store.projects.find(function(x){return x.slug===m[1]||x.id===m[1];});if(!p)return fail(res,404,'Project not found');if(p.owner_id!==user.id&&user.role!=='admin')return fail(res,403,'Forbidden');const b=await body(req);for(const k of ['name','summary','description','icon_url'])if(b[k]!==undefined)p[k]=text(b[k],k==='description'?10000:500);if(b.category)p.category=['Mods','Plugins','Modpacks','Shaders','Resource Packs','Tools','Other'].includes(b.category)?b.category:p.category;p.updated_at=new Date().toISOString();await persist();return json(res,200,{project:p,slug:p.slug});}
   m=pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)\/upload$/);
   if(m&&req.method==='POST'){const user=requireUser(req,res);if(!user)return;const p=store.projects.find(function(x){return (x.slug===m[1]||x.id===m[1])&&x.owner_id===user.id;});if(!p)return fail(res,404,'Project not found');return upload(req,res,user,p,'release');}
   m=pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)\/media$/);
   if(m&&req.method==='POST'){const user=requireUser(req,res);if(!user)return;const p=store.projects.find(function(x){return (x.slug===m[1]||x.id===m[1])&&x.owner_id===user.id;});if(!p)return fail(res,404,'Project not found');return upload(req,res,user,p,'media');}
   m=pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)\/versions$/);
-  if(m&&req.method==='POST'){const user=requireUser(req,res);if(!user)return;const p=store.projects.find(function(x){return (x.slug===m[1]||x.id===m[1])&&x.owner_id===user.id;});if(!p)return fail(res,404,'Project not found');const b=await body(req);const ver=text(b.version_number,40);if(!ver)return fail(res,400,'Version number is required');if(!b.release_url)return fail(res,400,'Upload a release file to the quarantine endpoint first');const v={id:id(),project_id:p.id,version_number:ver,changelog:text(b.changelog,10000),game_versions:arrayStrings(b.game_versions,30,40),loaders:arrayStrings(b.loaders,15,40),dependencies:arrayStrings(b.dependencies,30,100),channel:['release','beta','alpha'].includes(b.channel)?b.channel:'release',file_key:null,file_name:null,file_size:0,release_url:text(b.release_url,1000),status:'pending',downloads:0,created_at:new Date().toISOString()};store.versions.push(v);await persist();return json(res,201,{ok:true,id:v.id});}
+  if(m&&req.method==='POST'){const user=requireUser(req,res);if(!user)return;const p=store.projects.find(function(x){return (x.slug===m[1]||x.id===m[1])&&x.owner_id===user.id;});if(!p)return fail(res,404,'Project not found');const b=await body(req);const ver=text(b.version_number,40);if(!ver)return fail(res,400,'Version number is required');const release=text(b.release_url,1000);let pending=null;if(b.file_key){pending=store.uploads.find(function(x){return x.key===b.file_key&&x.project_id===p.id&&x.owner_id===user.id;});if(!pending)return fail(res,400,'Uploaded file reference is invalid or belongs to another project');}if(!pending&&!release)return fail(res,400,'Upload a release file or provide a GitHub release URL');if(release){try{const ru=new URL(release);if(ru.protocol!=='https:'||ru.hostname!=='github.com')return fail(res,400,'Release URL must point to github.com');}catch{return fail(res,400,'Invalid GitHub release URL');}}const v={id:id(),project_id:p.id,version_number:ver,changelog:text(b.changelog,10000),game_versions:arrayStrings(b.game_versions,30,40),loaders:arrayStrings(b.loaders,15,40),dependencies:arrayStrings(b.dependencies,30,100),channel:['release','beta','alpha'].includes(b.channel)?b.channel:'release',file_key:pending?pending.key:null,file_name:pending?pending.file_name:null,file_size:pending?pending.file_size:0,release_url:release||null,status:'pending',downloads:0,created_at:new Date().toISOString(),scan_status:pending?'quarantined':'external'};store.versions.push(v);if(pending)store.uploads=store.uploads.filter(function(x){return x.key!==pending.key;});saveAudit(user.id,'version.submitted','version',v.id,{});await persist();return json(res,201,{ok:true,id:v.id});}
+  m=pathname.match(/^\/api\/media\/([a-zA-Z0-9_-]+)$/);
+  if(m&&req.method==='GET'){const item=store.media.find(function(x){return x.id===m[1];});if(!item)return fail(res,404,'Media not found');const p=store.projects.find(function(x){return x.id===item.project_id&&x.status==='approved';});if(!p)return fail(res,404,'Media not found');try{const fp=path.join(UPLOAD_DIR,item.key);const st=await fs.stat(fp);res.writeHead(200,{'content-type':item.content_type,'content-length':st.size,'content-disposition':'inline; filename="'+fileNameSafe(item.file_name)+'"','x-content-type-options':'nosniff','cache-control':'public, max-age=3600','content-security-policy':"default-src 'none'; sandbox"});return fs.createReadStream(fp).pipe(res);}catch{return fail(res,404,'Media file is missing');}}
   m=pathname.match(/^\/api\/versions\/([a-zA-Z0-9_-]+)\/download$/);
   if(m&&req.method==='GET'){const v=store.versions.find(function(x){return x.id===m[1]&&x.status==='approved';});const p=v&&store.projects.find(function(x){return x.id===v.project_id&&x.status==='approved';});if(!v||!p)return fail(res,404,'Version not found');if(v.release_url)return json(res,200,{external_url:v.release_url});if(!v.file_key||v.scan_status==='quarantined')return fail(res,423,'Release is quarantined or unavailable');const fp=path.join(UPLOAD_DIR,v.file_key);try{const st=await fs.stat(fp);v.downloads=(v.downloads||0)+1;p.downloads=(p.downloads||0)+1;store.analytics.push({id:id(),project_id:p.id,event_type:'download',created_at:new Date().toISOString()});await persist();res.writeHead(200,{'content-type':'application/octet-stream','content-length':st.size,'content-disposition':'attachment; filename="'+fileNameSafe(v.file_name)+'"','x-content-type-options':'nosniff','cache-control':'no-store'});return fs.createReadStream(fp).pipe(res);}catch{return fail(res,404,'Release file is missing');}}
   if(pathname==='/api/admin/projects'&&req.method==='GET'){const user=currentUser(req);if(!auditAllowed(user,res))return;const status=['pending','approved','rejected','archived'].includes(u.searchParams.get('status'))?u.searchParams.get('status'):'pending';return json(res,200,{projects:store.projects.filter(function(p){return p.status===status;}).map(function(p){const owner=store.users.find(function(x){return x.id===p.owner_id;});return Object.assign({},p,{author:owner&&owner.username});})});}
