@@ -1,4 +1,4 @@
-name: Deploy VoidFlame Labs
+name: Deploy Ali Labs
 
 on:
   push:
