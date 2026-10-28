@@ -26,7 +26,7 @@
 
 - Verify Cloudflare D1 Time Travel is available and record the recovery window for the account/plan.
 - Before migrations or destructive changes, export the database with Wrangler:
-  `npx wrangler d1 export voidflame-labs --remote --output ./backups/voidflame-labs-YYYYMMDD-HHMM.sql`
+  `npx wrangler d1 export ali-labs --remote --output ./backups/ali-labs-YYYYMMDD-HHMM.sql`
 - Encrypt exports at rest, restrict access, keep a copy outside the Cloudflare account, and never commit backups to Git.
 - Suggested starting retention: daily copies for 7 days and weekly copies for 4 weeks, adjusted for privacy and storage requirements.
 - At least quarterly, restore an export to a separate test database and verify record counts, project/version relationships, and migrations. Never test restore over production.
