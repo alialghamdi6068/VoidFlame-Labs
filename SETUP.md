@@ -1,67 +1,54 @@
-# Ali Labs — Deployment Setup
+# Ali Labs — Run and deployment setup
 
-This repository has a static GitHub Pages frontend and a separate Cloudflare Worker API. The homepage's reviewed JSON catalogue works without the API; sign-in, profiles, publishing, moderation, comments, favorites, follows, releases, and media require the API.
+Ali Labs now includes a same-origin Node.js server. It serves the frontend and API together and persists application data in local JSON files; uploaded files are kept on the host's disk. It does not require a remote database or object-storage service.
 
-## 1. Deploy the frontend
+## Requirements
 
-1. Open GitHub repository **Settings → Pages** and select **GitHub Actions** as the source.
-2. Open **Actions → Deploy Ali Labs** and confirm the workflow succeeds.
-3. Public site: `https://alialghamdi6068.github.io/VoidFlame-Labs/`.
+- Node.js 20 or newer.
+- A host that runs a persistent Node.js process and provides **persistent writable disk**. Do not use an ephemeral filesystem for production data.
+- HTTPS in production.
+- Optional GitHub OAuth credentials for account sign-in.
 
-## 2. Provision Cloudflare
+## Run locally
 
-From the repository root on a machine with Node.js installed:
+1. Install Node.js 20+.
+2. In the repository directory, run \`npm test\`.
+3. Run \`npm start\`.
+4. Open \`http://localhost:3000\`.
 
-1. Run `npx wrangler login`.
-2. Create a D1 database: `npx wrangler d1 create ali-labs`.
-3. Copy the returned database ID into `worker/wrangler.toml`, replacing `REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID`.
-4. Create the R2 bucket: `npx wrangler r2 bucket create ali-labs-files`.
-5. Replace `API_URL` in `worker/wrangler.toml` with the actual HTTPS Worker origin (for example, `https://ali-labs-api.<account>.workers.dev`). Do not leave the placeholder in a deployed configuration.
-6. From the `worker/` directory, apply migrations and deploy:
-   ```sh
-   npx wrangler d1 migrations apply ali-labs --remote
-   npx wrangler deploy
-   ```
-7. Verify `https://YOUR_WORKER_HOST/api/health` returns `{"status":"ok"}`. A 503 means the API/database is not ready; do not connect the frontend yet.
+The server creates \`data-local/store.json\` and \`data-local/uploads/\` automatically. \`data-local\` is ignored by Git. Set \`DATA_DIR\` only if you want to put persistent data in a mounted disk path.
 
-## 3. Configure GitHub OAuth and secrets
+## Environment variables
 
-1. Create a GitHub OAuth App. Set its authorization callback URL to `https://YOUR_WORKER_HOST/api/auth/callback`.
-2. Set `GITHUB_CLIENT_ID` as a Worker variable using the Cloudflare dashboard or Wrangler configuration.
-3. From `worker/`, set secrets interactively (do not paste secret values into chat, Git, or frontend files):
-   ```sh
-   npx wrangler secret put GITHUB_CLIENT_SECRET
-   npx wrangler secret put SESSION_SECRET
-   ```
-   Use a high-entropy random `SESSION_SECRET`.
-4. Deploy again after changing Worker variables/secrets.
-5. Confirm OAuth's callback URL exactly matches the deployed Worker origin and callback path.
+Only three secrets/configuration values are needed for GitHub sign-in:
 
-## 4. Connect the frontend
+- \`GITHUB_CLIENT_ID\`
+- \`GITHUB_CLIENT_SECRET\`
+- \`SESSION_SECRET\` (reserved for deployments that need an additional application signing secret; session tokens are currently random opaque tokens hashed on disk)
 
-After the health check succeeds, set `apiBaseUrl` in the root `config.js` to the deployed Worker origin, with no trailing slash. This is a public URL, not a secret. Never put OAuth secrets, database credentials, or service-role keys in `config.js`.
+The server derives the OAuth callback from the current host: \`https://YOUR_DOMAIN/api/auth/callback\`. Set that exact callback in your GitHub OAuth App. \`PORT\`, \`HOST\`, and \`DATA_DIR\` are optional host/runtime settings, not required secrets. The app can start without OAuth credentials, but sign-in returns a clear 503 until configured.
 
-If browser cookie restrictions block sign-in between GitHub Pages and `workers.dev`, use a custom domain arrangement that makes the frontend and API same-site, then update `SITE_URL`, `API_URL`, OAuth callback settings, and `config.js` consistently.
+## Persistent storage model
 
-## 5. Create the first administrator
+- \`data-local/store.json\`: users, sessions, projects, versions, comments, reports, audit records, and analytics.
+- \`data-local/uploads/quarantine/\`: new uploads awaiting trusted scanning/review.
+- \`data-local/uploads/\`: released files after they have passed the release workflow.
+- Files are written using a temporary file and atomic rename. Keep a separate backup outside the host account and test restoration before production launch.
 
-1. Sign in once using the GitHub OAuth flow.
-2. In Cloudflare D1, promote only your trusted account:
-   ```sql
-   UPDATE users SET role='admin' WHERE username='YOUR_GITHUB_USERNAME';
-   ```
-3. Verify the update affected exactly one row. Never grant admin/moderator access to an untrusted account.
+## Important security limitations
 
-## 6. Production security checklist
+- New file uploads are quarantined. The built-in signature/extension checks are not malware scanning. Uploaded release files cannot be downloaded while quarantined, and this server refuses to approve quarantined uploads without a trusted scanner/release process.
+- GitHub OAuth must be configured on the production host; live OAuth cannot be verified without the actual credentials and callback domain.
+- The JSON store is appropriate for a small single-instance deployment. It is not a multi-process database: run exactly one server process per data directory. For larger concurrent workloads, migrate to a transactional database rather than sharing this file between processes.
+- The first GitHub account to sign in is assigned admin. Protect the OAuth app and the deployment URL during initial setup; after the first admin is created, review the role in \`data-local/store.json\`.
+- Always use HTTPS in production so session cookies are Secure.
+- A successful local test is not proof of production backup, scanner, OAuth, or host persistence.
 
-- Keep Worker secrets out of Git and frontend code; rotate any secret suspected of exposure.
-- Use least-privilege Cloudflare credentials and MFA on the Cloudflare/GitHub accounts.
-- Verify D1 migrations, R2 bindings, rate-limit bindings, and the scheduled trigger in the deployed Worker.
-- Test sign-in, logout, session listing/revocation, account export, project ownership checks, moderation roles, upload type/size limits, approved-version visibility, and downloads.
-- Configure encrypted D1 exports and a separate R2 backup, retain backups outside the primary account, and run a restore drill before launch. The repository documents the process but does not yet provision fully automated off-account backups.
-- The current upload signature checks are not malware scanning. Keep untrusted uploads restricted until a maintained scanner and quarantine workflow is integrated with the Worker API.
-- Do not treat a passing GitHub Actions run as proof of production deployment, live OAuth, backups, or restore readiness.
+## Checks
 
-## Architecture note
+\`\`\`sh
+npm test
+npm start
+\`\`\`
 
-`supabase/` and `scanner/` contain an earlier/alternate Supabase implementation. They are not integrated with the active Cloudflare Worker frontend. Do not configure both backends as simultaneous sources of truth.
+Verify \`GET /api/health\` returns \`{"status":"ok","storage":"local-files","schemaVersion":1}\`.

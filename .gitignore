@@ -1,5 +1,7 @@
-# Local Supabase browser configuration
-config.js
+node_modules/
 .env
 .env.*
 !.env.example
+data-local/
+backups/
+*.log
