@@ -42,6 +42,10 @@ jobs:
         run: python3 worker/tests/test_security_contract.py
       - name: Check frontend privacy contracts
         run: python3 worker/tests/test_frontend_contract.py
+      - name: Run Node API tests
+        run: npm test
+      - name: Check server JavaScript syntax
+        run: node --check server.js
       - name: Check JavaScript syntax
         run: |
           python3 - <<'PY'

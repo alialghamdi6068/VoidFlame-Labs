@@ -19,6 +19,7 @@ const DB_FILE = path.join(DATA_DIR, 'store.json');
 const STATIC_EXTS = new Set(['.html','.css','.js','.json','.svg','.png','.jpg','.jpeg','.webp','.ico','.woff','.woff2','.txt']);
 
 function id() { return crypto.randomUUID(); }
+function tokenHash(token) { return crypto.createHmac('sha256', process.env.SESSION_SECRET || 'local-development-only-change-before-production').update(String(token || '')).digest('hex'); }
 function json(res, status, data, headers) {
   const body = JSON.stringify(data);
   res.writeHead(status, Object.assign({
@@ -89,7 +90,7 @@ function userPublic(u) {
 function currentUser(req) {
   const token=parseCookies(req).ali_session;
   if(!token)return null;
-  const row=store.sessions.find(function(s){return safeEqual(s.token_hash,crypto.createHash('sha256').update(token).digest('hex')) && Date.parse(s.expires_at)>Date.now();});
+  const row=store.sessions.find(function(s){return safeEqual(s.token_hash,tokenHash(token)) && Date.parse(s.expires_at)>Date.now();});
   if(!row)return null;
   return store.users.find(function(u){return u.id===row.user_id;})||null;
 }
@@ -196,7 +197,7 @@ async function handle(req,res) {
     const q=u.searchParams;const stateCookie=parseCookies(req).ali_oauth_state;
     if(!stateCookie||!safeEqual(stateCookie,q.get('state')||''))return fail(res,400,'OAuth state validation failed');
     if(q.has('error')||!q.get('code'))return fail(res,400,'GitHub authorization was cancelled');
-    if(!process.env.GITHUB_CLIENT_ID||!process.env.GITHUB_CLIENT_SECRET)return fail(res,503,'GitHub OAuth is not configured');
+    if(!process.env.GITHUB_CLIENT_ID||!process.env.GITHUB_CLIENT_SECRET||!process.env.SESSION_SECRET)return fail(res,503,'GitHub OAuth and session security are not configured');
     const tokenRes=await fetch('https://github.com/login/oauth/access_token',{method:'POST',headers:{accept:'application/json','content-type':'application/json'},body:JSON.stringify({client_id:process.env.GITHUB_CLIENT_ID,client_secret:process.env.GITHUB_CLIENT_SECRET,code:q.get('code')})});
     const tokenData=await tokenRes.json();if(!tokenRes.ok||!tokenData.access_token)return fail(res,502,'GitHub sign-in failed');
     const ghRes=await fetch('https://api.github.com/user',{headers:{authorization:'Bearer '+tokenData.access_token,accept:'application/vnd.github+json','user-agent':'Ali-Labs'}});
@@ -212,14 +213,14 @@ async function handle(req,res) {
   }
   if(pathname==='/api/auth/logout'&&req.method==='POST'){
     const user=currentUser(req);const token=parseCookies(req).ali_session;
-    store.sessions=store.sessions.filter(function(s){return s.token_hash!==crypto.createHash('sha256').update(token||'').digest('hex');});
+    store.sessions=store.sessions.filter(function(s){return s.token_hash!==tokenHash(token||'');});
     if(user)saveAudit(user.id,'auth.logout','user',user.id,{});await persist();
     res.writeHead(200,{'set-cookie':clearSessionCookie()});return json(res,200,{ok:true});
   }
   if(pathname==='/api/me'&&req.method==='GET'){const user=currentUser(req);return json(res,200,{user:userPublic(user)});}
   if(pathname==='/api/me/sessions'&&req.method==='GET'){
     const user=requireUser(req,res);if(!user)return;
-    const active=store.sessions.filter(function(s){return s.user_id===user.id&&Date.parse(s.expires_at)>Date.now();}).map(function(s){return {id:s.id,created_at:s.created_at,expires_at:s.expires_at,user_agent:s.user_agent,current:s.token_hash===crypto.createHash('sha256').update(parseCookies(req).ali_session||'').digest('hex')};});
+    const active=store.sessions.filter(function(s){return s.user_id===user.id&&Date.parse(s.expires_at)>Date.now();}).map(function(s){return {id:s.id,created_at:s.created_at,expires_at:s.expires_at,user_agent:s.user_agent,current:s.token_hash===tokenHash(parseCookies(req).ali_session||'')};});
     return json(res,200,{sessions:active});
   }
   if(pathname==='/api/me/sessions'&&req.method==='DELETE'){
