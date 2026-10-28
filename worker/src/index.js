@@ -1,5 +1,5 @@
 /**
- * VoidFlame Labs API — Cloudflare Worker + D1 + R2.
+ * Ali Labs API — Cloudflare Worker + D1 + R2.
  * Required bindings: DB (D1), FILES (R2); vars: SITE_URL, GITHUB_CLIENT_ID.
  * Secrets: GITHUB_CLIENT_SECRET, SESSION_SECRET.
  */
@@ -200,7 +200,7 @@ export default {
           env.DB.prepare("SELECT c.id,c.project_id,c.body,c.status,c.created_at FROM comments c WHERE c.user_id=? ORDER BY c.created_at DESC").bind(user.id).all(),
           env.DB.prepare("SELECT id,project_id,reason,details,status,created_at FROM reports WHERE reporter_id=? ORDER BY created_at DESC").bind(user.id).all()
         ]);
-        return json({exported_at:new Date().toISOString(),account:{username:user.username,display_name:user.display_name,avatar_url:user.avatar_url,bio:user.bio,created_at:(await env.DB.prepare("SELECT created_at FROM users WHERE id=?").bind(user.id).first())?.created_at},projects:projects.results||[],favorites:favorites.results||[],follows:follows.results||[],comments:comments.results||[],reports:reports.results||[]},200,{"content-disposition":'attachment; filename="voidflame-account-export.json"'});
+        return json({exported_at:new Date().toISOString(),account:{username:user.username,display_name:user.display_name,avatar_url:user.avatar_url,bio:user.bio,created_at:(await env.DB.prepare("SELECT created_at FROM users WHERE id=?").bind(user.id).first())?.created_at},projects:projects.results||[],favorites:favorites.results||[],follows:follows.results||[],comments:comments.results||[],reports:reports.results||[]},200,{"content-disposition":'attachment; filename="ali-labs-account-export.json"'});
       }
       if (url.pathname === "/api/projects" && request.method === "GET") {
         const q=(url.searchParams.get("q")||"").trim().slice(0,100);
