@@ -1,4 +1,4 @@
-# VoidFlame Labs — Security and DDoS protection
+# Ali Labs — Security and DDoS protection
 
 ## What is implemented in the Worker
 
