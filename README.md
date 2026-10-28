@@ -1,6 +1,6 @@
-# VoidFlame Labs
+# Ali Labs
 
-VoidFlame Labs is a Minecraft project discovery and publishing platform for mods, plugins, modpacks, shaders, resource packs, and tools.
+Ali Labs is a Minecraft project discovery and publishing platform for mods, plugins, modpacks, shaders, resource packs, and tools.
 
 ## Architecture
 
