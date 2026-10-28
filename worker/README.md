@@ -1,16 +1,16 @@
-# VoidFlame Labs API
+# Ali Labs API
 
-Cloudflare Workers + D1 + R2 backend for the VoidFlame Labs static frontend.
+Cloudflare Workers + D1 + R2 backend for the Ali Labs static frontend.
 
 ## Deployment checklist
 
-1. Create a Cloudflare D1 database named `voidflame-labs` and an R2 bucket named `voidflame-labs-files`.
+1. Create a Cloudflare D1 database named `ali-labs` and an R2 bucket named `ali-labs-files`.
 2. Replace `database_id` in `wrangler.toml` with the real D1 database ID.
 3. Set `SITE_URL` to the deployed site origin. Set `API_URL` to the deployed Worker origin.
 4. Create a GitHub OAuth App with callback `https://YOUR_WORKER_HOST/api/auth/callback`; set `GITHUB_CLIENT_ID` as a Worker variable and secrets with:
    - `npx wrangler secret put GITHUB_CLIENT_SECRET`
    - `npx wrangler secret put SESSION_SECRET` (long random secret)
-5. Apply the checked-in migration: `npx wrangler d1 migrations apply voidflame-labs --remote`.
+5. Apply the checked-in migration: `npx wrangler d1 migrations apply ali-labs --remote`.
 6. Deploy: `npx wrangler deploy`.
 7. Update the public `config.js` file in the repository with the Worker origin. It contains public URLs only, never secrets.
 8. Run OAuth, upload, download, moderation, and mobile-browser tests before public launch.
