@@ -1,11 +1,11 @@
-# VoidFlame Labs — Deployment Setup
+# Ali Labs — Deployment Setup
 
 This repository has a static GitHub Pages frontend and a separate Cloudflare Worker API. The homepage's reviewed JSON catalogue works without the API; sign-in, profiles, publishing, moderation, comments, favorites, follows, releases, and media require the API.
 
 ## 1. Deploy the frontend
 
 1. Open GitHub repository **Settings → Pages** and select **GitHub Actions** as the source.
-2. Open **Actions → Deploy VoidFlame Labs** and confirm the workflow succeeds.
+2. Open **Actions → Deploy Ali Labs** and confirm the workflow succeeds.
 3. Public site: `https://alialghamdi6068.github.io/VoidFlame-Labs/`.
 
 ## 2. Provision Cloudflare
@@ -13,13 +13,13 @@ This repository has a static GitHub Pages frontend and a separate Cloudflare Wor
 From the repository root on a machine with Node.js installed:
 
 1. Run `npx wrangler login`.
-2. Create a D1 database: `npx wrangler d1 create voidflame-labs`.
+2. Create a D1 database: `npx wrangler d1 create ali-labs`.
 3. Copy the returned database ID into `worker/wrangler.toml`, replacing `REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID`.
-4. Create the R2 bucket: `npx wrangler r2 bucket create voidflame-labs-files`.
-5. Replace `API_URL` in `worker/wrangler.toml` with the actual HTTPS Worker origin (for example, `https://voidflame-labs-api.<account>.workers.dev`). Do not leave the placeholder in a deployed configuration.
+4. Create the R2 bucket: `npx wrangler r2 bucket create ali-labs-files`.
+5. Replace `API_URL` in `worker/wrangler.toml` with the actual HTTPS Worker origin (for example, `https://ali-labs-api.<account>.workers.dev`). Do not leave the placeholder in a deployed configuration.
 6. From the `worker/` directory, apply migrations and deploy:
    ```sh
-   npx wrangler d1 migrations apply voidflame-labs --remote
+   npx wrangler d1 migrations apply ali-labs --remote
    npx wrangler deploy
    ```
 7. Verify `https://YOUR_WORKER_HOST/api/health` returns `{"status":"ok"}`. A 503 means the API/database is not ready; do not connect the frontend yet.
