@@ -20,6 +20,10 @@ test('health endpoint starts with local file storage and reports ready', async f
   const data=JSON.parse(await fs.readFile(path.join(dir,'store.json'),'utf8'));
   assert.equal(data.schemaVersion,1);
   assert.ok(Array.isArray(data.users));
+  const snapshots=(await fs.readdir(path.join(dir,'backups'))).filter(function(name){return name.startsWith('snapshot-');});
+  assert.ok(snapshots.length>=1,'startup should create a recovery snapshot');
+  const backup=JSON.parse(await fs.readFile(path.join(dir,'backups',snapshots[0],'store.json'),'utf8'));
+  assert.equal(backup.schemaVersion,1);
 });
 test('unknown API paths return JSON 404', async function(t) {
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'ali-labs-test-'));
