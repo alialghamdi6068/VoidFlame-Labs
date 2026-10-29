@@ -57,3 +57,15 @@ test('malformed percent-encoded cookies do not crash the API', async function(t)
   assert.equal(response.status,200);
   assert.deepEqual(await response.json(),{user:null});
 });
+
+
+test('API rejects primitive JSON bodies with a controlled 400 response', async function(t) {
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'ali-labs-test-'));
+  const port=44000+Math.floor(Math.random()*10000);
+  const child=spawn(process.execPath,[path.join(__dirname,'..','server.js')],{env:{...process.env,DATA_DIR:dir,PORT:String(port),HOST:'127.0.0.1',NODE_ENV:'test'},stdio:'ignore'});
+  t.after(async function(){child.kill('SIGTERM');await fs.rm(dir,{recursive:true,force:true});});
+  let response;
+  for(let i=0;i<50;i++){try{response=await fetch('http://127.0.0.1:'+port+'/api/auth/logout',{method:'POST',headers:{'content-type':'application/json',origin:'http://127.0.0.1:'+port},body:'null'});break;}catch{await new Promise(function(r){setTimeout(r,100);});}}
+  assert.ok(response,'server did not start');
+  assert.equal(response.status,200);
+});

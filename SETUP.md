@@ -33,7 +33,8 @@ The server derives the OAuth callback from the current host: \`https://YOUR_DOMA
 - \`data-local/store.json\`: users, sessions, projects, versions, comments, reports, audit records, and analytics.
 - \`data-local/uploads/quarantine/\`: new uploads awaiting trusted scanning/review.
 - \`data-local/uploads/\`: released files after they have passed the release workflow.
-- Files are written using a temporary file and atomic rename. Keep a separate backup outside the host account and test restoration before production launch.
+- Files are written using a temporary file and atomic rename. Ten local snapshots are rotated every 30 minutes under `DATA_DIR/backups/`; keep a separate backup outside the host account and test restoration before production launch.
+- Upload processing is capped at three concurrent uploads per process to reduce memory-exhaustion risk.
 
 ## Important security limitations
 

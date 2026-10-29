@@ -58,6 +58,10 @@ function emptyStore() {
 }
 let store=emptyStore();
 let writeQueue=Promise.resolve();
+let activeUploads=0;
+const MAX_CONCURRENT_UPLOADS=3;
+const BACKUP_DIR=path.join(DATA_DIR,'backups');
+const BACKUP_KEEP=10;
 async function persist() {
   const snapshot=JSON.stringify(store,null,2);
   writeQueue=writeQueue.then(async function(){
@@ -66,6 +70,16 @@ async function persist() {
     await fs.rename(tmp,DB_FILE);
   });
   return writeQueue;
+}
+async function createBackup() {
+  await fs.mkdir(BACKUP_DIR,{recursive:true,mode:0o700});
+  try { await fs.access(DB_FILE); } catch { return; }
+  const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+  const destination=path.join(BACKUP_DIR,'store-'+stamp+'.json');
+  await fs.copyFile(DB_FILE,destination,fs.constants.COPYFILE_EXCL);
+  await fs.chmod(destination,0o600);
+  const files=(await fs.readdir(BACKUP_DIR)).filter(function(name){return /^store-.*\.json$/.test(name);}).sort().reverse();
+  for(const old of files.slice(BACKUP_KEEP))await fs.unlink(path.join(BACKUP_DIR,old)).catch(function(){});
 }
 async function initStore() {
   await fs.mkdir(DATA_DIR,{recursive:true,mode:0o700});
@@ -282,15 +296,15 @@ async function handle(req,res) {
   m=pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)$/);
   if(m&&req.method==='PATCH'){const user=requireUser(req,res);if(!user)return;const p=store.projects.find(function(x){return x.slug===m[1]||x.id===m[1];});if(!p)return fail(res,404,'Project not found');if(p.owner_id!==user.id&&user.role!=='admin')return fail(res,403,'Forbidden');const b=await body(req);for(const k of ['name','summary','description','icon_url','requirements'])if(b[k]!==undefined)p[k]=text(b[k],k==='description'?10000:(k==='requirements'?5000:500));if(b.source_url!==undefined){const source=text(b.source_url,1000);if(source){try{const su=new URL(source);if(su.protocol!=='https:'||su.hostname!=='github.com')return fail(res,400,'Source URL must point to GitHub over HTTPS');}catch{return fail(res,400,'Invalid source URL');}}p.source_url=source;}if(b.category)p.category=['Mods','Plugins','Modpacks','Shaders','Resource Packs','Tools','Other'].includes(b.category)?b.category:p.category;p.updated_at=new Date().toISOString();await persist();return json(res,200,{project:p,slug:p.slug});}
   m=pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)\/upload$/);
-  if(m&&req.method==='POST'){const user=requireUser(req,res);if(!user)return;const p=store.projects.find(function(x){return (x.slug===m[1]||x.id===m[1])&&x.owner_id===user.id;});if(!p)return fail(res,404,'Project not found');return upload(req,res,user,p,'release');}
+  if(m&&req.method==='POST'){const user=requireUser(req,res);if(!user)return;const p=store.projects.find(function(x){return (x.slug===m[1]||x.id===m[1])&&x.owner_id===user.id;});if(!p)return fail(res,404,'Project not found');if(activeUploads>=MAX_CONCURRENT_UPLOADS)return fail(res,429,'Upload capacity is busy; retry shortly');activeUploads++;return upload(req,res,user,p,'release').finally(function(){activeUploads--;});}
   m=pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)\/media$/);
-  if(m&&req.method==='POST'){const user=requireUser(req,res);if(!user)return;const p=store.projects.find(function(x){return (x.slug===m[1]||x.id===m[1])&&x.owner_id===user.id;});if(!p)return fail(res,404,'Project not found');return upload(req,res,user,p,'media');}
+  if(m&&req.method==='POST'){const user=requireUser(req,res);if(!user)return;const p=store.projects.find(function(x){return (x.slug===m[1]||x.id===m[1])&&x.owner_id===user.id;});if(!p)return fail(res,404,'Project not found');if(activeUploads>=MAX_CONCURRENT_UPLOADS)return fail(res,429,'Upload capacity is busy; retry shortly');activeUploads++;return upload(req,res,user,p,'media').finally(function(){activeUploads--;});}
   m=pathname.match(/^\/api\/developer\/projects\/([a-zA-Z0-9_-]+)\/versions$/);
   if(m&&req.method==='POST'){const user=requireUser(req,res);if(!user)return;const p=store.projects.find(function(x){return (x.slug===m[1]||x.id===m[1])&&x.owner_id===user.id;});if(!p)return fail(res,404,'Project not found');const b=await body(req);const ver=text(b.version_number,40);if(!ver)return fail(res,400,'Version number is required');const release=text(b.release_url,1000);let pending=null;if(b.file_key){pending=store.uploads.find(function(x){return x.key===b.file_key&&x.project_id===p.id&&x.owner_id===user.id;});if(!pending)return fail(res,400,'Uploaded file reference is invalid or belongs to another project');}if(!pending&&!release)return fail(res,400,'Upload a release file or provide a GitHub release URL');if(release){try{const ru=new URL(release);if(ru.protocol!=='https:'||ru.hostname!=='github.com')return fail(res,400,'Release URL must point to github.com');}catch{return fail(res,400,'Invalid GitHub release URL');}}const v={id:id(),project_id:p.id,version_number:ver,changelog:text(b.changelog,10000),game_versions:arrayStrings(b.game_versions,30,40),loaders:arrayStrings(b.loaders,15,40),dependencies:arrayStrings(b.dependencies,30,100),channel:['release','beta','alpha'].includes(b.channel)?b.channel:'release',file_key:pending?pending.key:null,file_name:pending?pending.file_name:null,file_size:pending?pending.file_size:0,release_url:release||null,status:'pending',downloads:0,created_at:new Date().toISOString(),scan_status:pending?'quarantined':'external'};store.versions.push(v);if(pending)store.uploads=store.uploads.filter(function(x){return x.key!==pending.key;});saveAudit(user.id,'version.submitted','version',v.id,{});await persist();return json(res,201,{ok:true,id:v.id});}
   m=pathname.match(/^\/api\/media\/([a-zA-Z0-9_-]+)$/);
   if(m&&req.method==='GET'){const item=store.media.find(function(x){return x.id===m[1];});if(!item)return fail(res,404,'Media not found');const p=store.projects.find(function(x){return x.id===item.project_id&&x.status==='approved';});if(!p)return fail(res,404,'Media not found');try{const fp=path.join(UPLOAD_DIR,item.key);const st=await fs.stat(fp);res.writeHead(200,{'content-type':item.content_type,'content-length':st.size,'content-disposition':'inline; filename="'+fileNameSafe(item.file_name)+'"','x-content-type-options':'nosniff','cache-control':'public, max-age=3600','content-security-policy':"default-src 'none'; sandbox"});return fs.createReadStream(fp).pipe(res);}catch{return fail(res,404,'Media file is missing');}}
   m=pathname.match(/^\/api\/versions\/([a-zA-Z0-9_-]+)\/download$/);
-  if(m&&req.method==='GET'){const v=store.versions.find(function(x){return x.id===m[1]&&x.status==='approved';});const p=v&&store.projects.find(function(x){return x.id===v.project_id&&x.status==='approved';});if(!v||!p)return fail(res,404,'Version not found');if(v.release_url)return json(res,200,{external_url:v.release_url});if(!v.file_key||v.scan_status==='quarantined')return fail(res,423,'Release is quarantined or unavailable');const fp=path.join(UPLOAD_DIR,v.file_key);try{const st=await fs.stat(fp);v.downloads=(v.downloads||0)+1;p.downloads=(p.downloads||0)+1;store.analytics.push({id:id(),project_id:p.id,event_type:'download',created_at:new Date().toISOString()});await persist();res.writeHead(200,{'content-type':'application/octet-stream','content-length':st.size,'content-disposition':'attachment; filename="'+fileNameSafe(v.file_name)+'"','x-content-type-options':'nosniff','cache-control':'no-store'});return fs.createReadStream(fp).pipe(res);}catch{return fail(res,404,'Release file is missing');}}
+  if(m&&req.method==='GET'){const v=store.versions.find(function(x){return x.id===m[1]&&x.status==='approved';});const p=v&&store.projects.find(function(x){return x.id===v.project_id&&x.status==='approved';});if(!v||!p)return fail(res,404,'Version not found');if(v.release_url)return json(res,200,{external_url:v.release_url});if(!v.file_key||v.scan_status==='quarantined')return fail(res,423,'Release is quarantined or unavailable');const fp=path.join(UPLOAD_DIR,v.file_key);try{const st=await fs.stat(fp);v.downloads=(v.downloads||0)+1;p.downloads=(p.downloads||0)+1;store.analytics.push({id:id(),project_id:p.id,event_type:'download',created_at:new Date().toISOString()});if(store.analytics.length>100000)store.analytics.splice(0,store.analytics.length-100000);await persist();res.writeHead(200,{'content-type':'application/octet-stream','content-length':st.size,'content-disposition':'attachment; filename="'+fileNameSafe(v.file_name)+'"','x-content-type-options':'nosniff','cache-control':'no-store'});return fs.createReadStream(fp).pipe(res);}catch{return fail(res,404,'Release file is missing');}}
   if(pathname==='/api/admin/projects'&&req.method==='GET'){const user=currentUser(req);if(!auditAllowed(user,res))return;const status=['pending','approved','rejected','archived'].includes(u.searchParams.get('status'))?u.searchParams.get('status'):'pending';return json(res,200,{projects:store.projects.filter(function(p){return p.status===status;}).map(function(p){const owner=store.users.find(function(x){return x.id===p.owner_id;});return Object.assign({},p,{author:owner&&owner.username});})});}
   if(pathname==='/api/admin/versions'&&req.method==='GET'){const user=currentUser(req);if(!auditAllowed(user,res))return;const status=['pending','approved','rejected'].includes(u.searchParams.get('status'))?u.searchParams.get('status'):'pending';return json(res,200,{versions:store.versions.filter(function(v){return v.status===status;}).map(function(v){const p=store.projects.find(function(x){return x.id===v.project_id;});return Object.assign({},v,{project_name:p&&p.name,project_slug:p&&p.slug,author:(store.users.find(function(x){return x.id===p?.owner_id;})||{}).username});})});}
   if(pathname==='/api/admin/reports'&&req.method==='GET'){const user=currentUser(req);if(!auditAllowed(user,res))return;return json(res,200,{reports:store.reports.slice().reverse().slice(0,100).map(function(r){const p=store.projects.find(function(x){return x.id===r.project_id;});const owner=store.users.find(function(x){return x.id===r.reporter_id;});return Object.assign({},r,{project_name:p&&p.name,reporter:owner&&owner.username});})});}
@@ -319,5 +333,7 @@ async function main() {
   server.listen(PORT,HOST,function(){console.log('Ali Labs listening on '+HOST+':'+PORT);console.log('Persistent file storage: '+DATA_DIR);});
   const cleanup=setInterval(function(){const now=Date.now();store.sessions=store.sessions.filter(function(s){return Date.parse(s.expires_at)>now;});for(const [key,v] of hits)if(now-v.start>3600000)hits.delete(key);persist().catch(function(e){console.error('Cleanup save failed:',e.message);});},60*60*1000);
   cleanup.unref();
+  const backups=setInterval(function(){createBackup().catch(function(e){console.error('Backup failed:',e.message);});},30*60*1000);
+  backups.unref();
 }
 main().catch(function(e){console.error('Startup failed:',e);process.exit(1);});
