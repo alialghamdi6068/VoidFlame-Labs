@@ -58,3 +58,40 @@ test('malformed percent-encoded cookies do not crash the API', async function(t)
   assert.deepEqual(await response.json(),{user:null});
 });
 
+
+
+test('public project API does not disclose internal owner, follower, or storage keys', async function(t) {
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'ali-labs-test-'));
+  const data={schemaVersion:1,users:[{id:'owner-internal-id',github_id:'123',username:'creator',display_name:'Creator',role:'user',created_at:'2026-01-01T00:00:00.000Z'}],projects:[{id:'project-internal-id',owner_id:'owner-internal-id',name:'Sample Project',slug:'sample-project',summary:'A test project',description:'Description',category:'Plugins',status:'approved',downloads:4,created_at:'2026-01-01T00:00:00.000Z',updated_at:'2026-01-01T00:00:00.000Z',favorites:['private-user-1'],followers:['private-user-2']}],versions:[{id:'version-public-id',project_id:'project-internal-id',version_number:'1.0.0',changelog:'Initial',game_versions:['1.21.1'],loaders:['Paper'],dependencies:[],channel:'release',file_key:'internal-storage-key',file_name:'sample.jar',file_size:4,status:'approved',scan_status:'clean',downloads:4,created_at:'2026-01-01T00:00:00.000Z'}]};
+  await fs.mkdir(dir,{recursive:true});await fs.writeFile(path.join(dir,'store.json'),JSON.stringify(data));
+  const port=45000+Math.floor(Math.random()*10000);
+  const child=spawn(process.execPath,[path.join(__dirname,'..','server.js')],{env:{...process.env,DATA_DIR:dir,PORT:String(port),HOST:'127.0.0.1',NODE_ENV:'test'},stdio:'ignore'});
+  t.after(async function(){child.kill('SIGTERM');await fs.rm(dir,{recursive:true,force:true});});
+  let response;
+  for(let i=0;i<50;i++){try{response=await fetch('http://127.0.0.1:'+port+'/api/projects/sample-project');break;}catch{await new Promise(function(r){setTimeout(r,100);});}}
+  assert.ok(response,'server did not start');
+  assert.equal(response.status,200);
+  const result=await response.json();
+  assert.equal(result.project.author,'creator');
+  assert.equal('owner_id' in result.project,false);
+  assert.equal('favorites' in result.project,false);
+  assert.equal('followers' in result.project,false);
+  assert.equal('file_key' in result.versions[0],false);
+  assert.equal('project_id' in result.versions[0],false);
+});
+
+test('project catalogue supports bounded pagination and metadata', async function(t) {
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'ali-labs-test-'));
+  const port=46000+Math.floor(Math.random()*10000);
+  const child=spawn(process.execPath,[path.join(__dirname,'..','server.js')],{env:{...process.env,DATA_DIR:dir,PORT:String(port),HOST:'127.0.0.1',NODE_ENV:'test'},stdio:'ignore'});
+  t.after(async function(){child.kill('SIGTERM');await fs.rm(dir,{recursive:true,force:true});});
+  let response;
+  for(let i=0;i<50;i++){try{response=await fetch('http://127.0.0.1:'+port+'/api/projects?page=2&limit=200&sort=name');break;}catch{await new Promise(function(r){setTimeout(r,100);});}}
+  assert.ok(response,'server did not start');
+  assert.equal(response.status,200);
+  const result=await response.json();
+  assert.equal(result.pagination.page,2);
+  assert.equal(result.pagination.limit,100);
+  assert.equal(result.pagination.total,0);
+  assert.deepEqual(result.projects,[]);
+});
