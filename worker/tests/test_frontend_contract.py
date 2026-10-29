@@ -11,7 +11,7 @@ checks = {
     "profile uses credentialed API requests": 'credentials:"include"' in profile,
     "moderation UI includes release review": 'data-tab="versions"' in admin and '/api/admin/versions?status=pending' in admin,
     "release moderation warns about missing malware scanning": "This is not malware scanning" in admin,
-    "frontend configuration contains no backend secrets": "apiBaseUrl: \"\"" in config and "SUPABASE_SERVICE_ROLE_KEY" not in config and "GITHUB_CLIENT_SECRET" not in config,
+    "frontend configuration contains no backend secrets": "apiBaseUrl: window.location.origin" in config and "SUPABASE_SERVICE_ROLE_KEY" not in config and "GITHUB_CLIENT_SECRET" not in config,
 }
 failed = [name for name, ok in checks.items() if not ok]
 for name, ok in checks.items():
