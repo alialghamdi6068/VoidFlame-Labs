@@ -367,6 +367,7 @@ async function main() {
   if(IS_PROD&&(!process.env.SESSION_SECRET||Buffer.byteLength(process.env.SESSION_SECRET)<32))throw new Error('Production requires SESSION_SECRET with at least 32 bytes');
   if(IS_PROD&&(!process.env.PUBLIC_BASE_URL||!/^https:\/\//i.test(process.env.PUBLIC_BASE_URL)))throw new Error('Production requires HTTPS PUBLIC_BASE_URL');
   await initStore();
+  await createBackup();
   const server=http.createServer(function(req,res){
     Promise.resolve().then(function(){return req.url.startsWith('/api/')?handle(req,res):serveStatic(req,res);}).catch(function(e){console.error('Request failed:',e.message);if(!res.headersSent)fail(res,e.status||500,e.status?e.message:'Internal server error');else res.destroy();});
   });
