@@ -32,3 +32,28 @@ test('unknown API paths return JSON 404', async function(t) {
   assert.equal(response.status,404);
   assert.equal((await response.json()).error,'Not found');
 });
+
+
+test('unsafe API requests with a session cookie reject missing Origin headers', async function(t) {
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'ali-labs-test-'));
+  const port=42000+Math.floor(Math.random()*10000);
+  const child=spawn(process.execPath,[path.join(__dirname,'..','server.js')],{env:{...process.env,DATA_DIR:dir,PORT:String(port),HOST:'127.0.0.1',NODE_ENV:'test'},stdio:'ignore'});
+  t.after(async function(){child.kill('SIGTERM');await fs.rm(dir,{recursive:true,force:true});});
+  let response;
+  for(let i=0;i<50;i++){try{response=await fetch('http://127.0.0.1:'+port+'/api/auth/logout',{method:'POST',headers:{cookie:'ali_session=invalid'}});break;}catch{await new Promise(function(r){setTimeout(r,100);});}}
+  assert.ok(response,'server did not start');
+  assert.equal(response.status,403);
+  assert.equal((await response.json()).error,'Cross-origin request rejected');
+});
+
+test('malformed percent-encoded cookies do not crash the API', async function(t) {
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'ali-labs-test-'));
+  const port=43000+Math.floor(Math.random()*10000);
+  const child=spawn(process.execPath,[path.join(__dirname,'..','server.js')],{env:{...process.env,DATA_DIR:dir,PORT:String(port),HOST:'127.0.0.1',NODE_ENV:'test'},stdio:'ignore'});
+  t.after(async function(){child.kill('SIGTERM');await fs.rm(dir,{recursive:true,force:true});});
+  let response;
+  for(let i=0;i<50;i++){try{response=await fetch('http://127.0.0.1:'+port+'/api/me',{headers:{cookie:'ali_session=%E0%A4%A'}});break;}catch{await new Promise(function(r){setTimeout(r,100);});}}
+  assert.ok(response,'server did not start');
+  assert.equal(response.status,200);
+  assert.deepEqual(await response.json(),{user:null});
+});

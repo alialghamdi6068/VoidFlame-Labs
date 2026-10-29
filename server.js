@@ -19,7 +19,7 @@ const DB_FILE = path.join(DATA_DIR, 'store.json');
 const STATIC_EXTS = new Set(['.html','.css','.js','.json','.svg','.png','.jpg','.jpeg','.webp','.ico','.woff','.woff2','.txt']);
 
 function id() { return crypto.randomUUID(); }
-function tokenHash(token) { return crypto.createHmac('sha256', process.env.SESSION_SECRET || 'local-development-only-change-before-production').update(String(token || '')).digest('hex'); }
+function tokenHash(token) { const secret=process.env.SESSION_SECRET || (!IS_PROD ? 'local-development-only-change-before-production' : ''); if(!secret)throw new Error('SESSION_SECRET is required'); return crypto.createHmac('sha256', secret).update(String(token || '')).digest('hex'); }
 function json(res, status, data, headers) {
   const body = JSON.stringify(data);
   res.writeHead(status, Object.assign({
@@ -27,16 +27,20 @@ function json(res, status, data, headers) {
     'cache-control':'no-store',
     'x-content-type-options':'nosniff',
     'referrer-policy':'strict-origin-when-cross-origin',
-    'content-security-policy':"default-src 'self' https: data: blob:; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com 'unsafe-inline'; style-src 'self' https: 'unsafe-inline'; img-src 'self' https: data: blob:; connect-src 'self' https://api.github.com https://github.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://github.com",
+    'content-security-policy':"default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com 'unsafe-inline'; style-src 'self' https: 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https://api.github.com https://github.com; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://github.com; upgrade-insecure-requests",'cross-origin-opener-policy':'same-origin','cross-origin-resource-policy':'same-origin',
     'permissions-policy':'camera=(), microphone=(), geolocation=()'
   }, headers || {}));
   res.end(body);
 }
 function fail(res, status, message) { return json(res, status, {error:message}); }
 function parseCookies(req) {
-  return Object.fromEntries(String(req.headers.cookie || '').split(';').map(function(v) {
-    const i=v.indexOf('='); return i<0?['','']:[v.slice(0,i).trim(),decodeURIComponent(v.slice(i+1).trim())];
-  }).filter(function(v){return v[0];}));
+  const result=Object.create(null);
+  for(const part of String(req.headers.cookie || '').split(';')) {
+    const i=part.indexOf('='); if(i<1)continue;
+    const key=part.slice(0,i).trim(); if(!/^[A-Za-z0-9_-]{1,80}$/.test(key))continue;
+    try { result[key]=decodeURIComponent(part.slice(i+1).trim()); } catch { continue; }
+  }
+  return result;
 }
 function safeEqual(a,b) {
   const aa=Buffer.from(String(a)); const bb=Buffer.from(String(b));
@@ -111,14 +115,20 @@ async function body(req) {
 function isSameOrigin(req) {
   if(['GET','HEAD','OPTIONS'].includes(req.method))return true;
   const origin=req.headers.origin;
-  if(!origin)return true;
-  const host=req.headers.host;
-  return origin===((IS_PROD?'https':'http')+'://'+host);
+  if(!origin)return !parseCookies(req).ali_session;
+  try {
+    const parsed=new URL(origin);
+    const expected=process.env.PUBLIC_BASE_URL ? new URL(process.env.PUBLIC_BASE_URL).origin : ((IS_PROD?'https':'http')+'://'+String(req.headers.host||''));
+    return parsed.origin===expected && parsed.username==='' && parsed.password==='';
+  } catch { return false; }
 }
 const hits=new Map();
 function rateLimit(key,limit,windowMs) {
-  const now=Date.now(); const old=hits.get(key);
-  if(!old||now-old.start>=windowMs){hits.set(key,{start:now,count:1});return true;}
+  const now=Date.now(); let old=hits.get(key);
+  if(!old||now-old.start>=windowMs){
+    if(hits.size>=20000){for(const [k,v] of hits)if(now-v.start>windowMs)hits.delete(k);if(hits.size>=20000)return false;}
+    hits.set(key,{start:now,count:1});return true;
+  }
   old.count++; return old.count<=limit;
 }
 function requireUser(req,res) {
@@ -189,8 +199,8 @@ function parseMultipart(buf,boundary) {
   return result;
 }
 async function handle(req,res) {
-  const u=new URL(req.url,'http://localhost');
-  const pathname=decodeURIComponent(u.pathname);
+  let u; let pathname;
+  try { u=new URL(req.url,'http://localhost'); pathname=decodeURIComponent(u.pathname); } catch { return fail(res,400,'Invalid URL'); }
   if(req.method==='OPTIONS'){res.writeHead(204,{'access-control-allow-methods':'GET,POST,PATCH,DELETE,OPTIONS','access-control-allow-headers':'Content-Type'});return res.end();}
   if(pathname.startsWith('/api/')&&!isSameOrigin(req))return fail(res,403,'Cross-origin request rejected');
   const ip=req.socket.remoteAddress||'unknown';
@@ -206,16 +216,16 @@ async function handle(req,res) {
     if(!stateCookie||!safeEqual(stateCookie,q.get('state')||''))return fail(res,400,'OAuth state validation failed');
     if(q.has('error')||!q.get('code'))return fail(res,400,'GitHub authorization was cancelled');
     if(!process.env.GITHUB_CLIENT_ID||!process.env.GITHUB_CLIENT_SECRET||!process.env.SESSION_SECRET)return fail(res,503,'GitHub OAuth and session security are not configured');
-    const tokenRes=await fetch('https://github.com/login/oauth/access_token',{method:'POST',headers:{accept:'application/json','content-type':'application/json'},body:JSON.stringify({client_id:process.env.GITHUB_CLIENT_ID,client_secret:process.env.GITHUB_CLIENT_SECRET,code:q.get('code')})});
+    const tokenRes=await fetch('https://github.com/login/oauth/access_token',{method:'POST',headers:{accept:'application/json','content-type':'application/json'},body:JSON.stringify({client_id:process.env.GITHUB_CLIENT_ID,client_secret:process.env.GITHUB_CLIENT_SECRET,code:q.get('code')}),signal:AbortSignal.timeout(8000)});
     const tokenData=await tokenRes.json();if(!tokenRes.ok||!tokenData.access_token)return fail(res,502,'GitHub sign-in failed');
-    const ghRes=await fetch('https://api.github.com/user',{headers:{authorization:'Bearer '+tokenData.access_token,accept:'application/vnd.github+json','user-agent':'Ali-Labs'}});
+    const ghRes=await fetch('https://api.github.com/user',{headers:{authorization:'Bearer '+tokenData.access_token,accept:'application/vnd.github+json','user-agent':'Ali-Labs'},signal:AbortSignal.timeout(8000)});
     const gh=await ghRes.json();if(!ghRes.ok||!gh.id||!gh.login)return fail(res,502,'Could not read GitHub account');
     let user=store.users.find(function(x){return String(x.github_id)===String(gh.id);});
-    if(!user){user={id:id(),github_id:String(gh.id),username:text(gh.login,39),display_name:text(gh.name||gh.login,80),avatar_url:text(gh.avatar_url,500),bio:'',role:store.users.length===0?'admin':'user',created_at:new Date().toISOString()};store.users.push(user);}
+    if(!user){const bootstrapId=String(process.env.ADMIN_GITHUB_ID||'');user={id:id(),github_id:String(gh.id),username:text(gh.login,39),display_name:text(gh.name||gh.login,80),avatar_url:text(gh.avatar_url,500),bio:'',role:bootstrapId && bootstrapId===String(gh.id)?'admin':'user',created_at:new Date().toISOString()};store.users.push(user);}
     else {user.username=text(gh.login,39);user.display_name=text(gh.name||gh.login,80);user.avatar_url=text(gh.avatar_url,500);}
     const token=crypto.randomBytes(32).toString('base64url');
     store.sessions=store.sessions.filter(function(s){return s.user_id!==user.id||Date.parse(s.expires_at)>Date.now();});
-    store.sessions.push({id:id(),user_id:user.id,token_hash:crypto.createHash('sha256').update(token).digest('hex'),created_at:new Date().toISOString(),expires_at:new Date(Date.now()+SESSION_TTL).toISOString(),user_agent:text(req.headers['user-agent'],250),ip_hash:crypto.createHash('sha256').update(ip).digest('hex')});
+    store.sessions.push({id:id(),user_id:user.id,token_hash:tokenHash(token),created_at:new Date().toISOString(),expires_at:new Date(Date.now()+SESSION_TTL).toISOString(),user_agent:text(req.headers['user-agent'],250),ip_hash:crypto.createHash('sha256').update(ip).digest('hex')});
     saveAudit(user.id,'auth.login','user',user.id,{});await persist();
     res.writeHead(302,{location:'/', 'set-cookie':[sessionCookie(token),'ali_oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0'+(IS_PROD?'; Secure':'')]});return res.end();
   }
@@ -232,7 +242,7 @@ async function handle(req,res) {
     return json(res,200,{sessions:active});
   }
   if(pathname==='/api/me/sessions'&&req.method==='DELETE'){
-    const user=requireUser(req,res);if(!user)return;const hash=crypto.createHash('sha256').update(parseCookies(req).ali_session||'').digest('hex');
+    const user=requireUser(req,res);if(!user)return;const hash=tokenHash(parseCookies(req).ali_session||'');
     store.sessions=store.sessions.filter(function(s){return s.user_id!==user.id||s.token_hash===hash;});await persist();return json(res,200,{ok:true});
   }
   if(pathname==='/api/me/export'&&req.method==='GET'){
