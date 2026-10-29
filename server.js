@@ -107,10 +107,10 @@ async function body(req) {
   for await (const chunk of req) { size+=chunk.length; if(size>MAX_BODY)throw Object.assign(new Error('Request body too large'),{status:413}); chunks.push(chunk); }
   if(!chunks.length)return {};
   const raw=Buffer.concat(chunks);
-  if((req.headers['content-type']||'').includes('application/json')) {
-    try{return JSON.parse(raw.toString('utf8'));}catch{throw Object.assign(new Error('Invalid JSON body'),{status:400});}
-  }
-  return {raw};
+  if(!(req.headers['content-type']||'').toLowerCase().includes('application/json'))throw Object.assign(new Error('Content-Type must be application/json'),{status:415});
+  let parsed; try{parsed=JSON.parse(raw.toString('utf8'));}catch{throw Object.assign(new Error('Invalid JSON body'),{status:400});}
+  if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw Object.assign(new Error('JSON body must be an object'),{status:400});
+  return parsed;
 }
 function isSameOrigin(req) {
   if(['GET','HEAD','OPTIONS'].includes(req.method))return true;
@@ -208,8 +208,10 @@ async function handle(req,res) {
   if(pathname==='/api/health'&&req.method==='GET')return json(res,200,{status:'ok',storage:'local-files',schemaVersion:store.schemaVersion});
   if(pathname==='/api/auth/github'&&req.method==='GET'){
     if(!process.env.GITHUB_CLIENT_ID)return fail(res,503,'GitHub sign-in is not configured');
+    if(IS_PROD&&!process.env.PUBLIC_BASE_URL)return fail(res,503,'PUBLIC_BASE_URL must be configured for production OAuth');
+    let publicBase; try{publicBase=new URL(process.env.PUBLIC_BASE_URL||((IS_PROD?'https':'http')+'://'+String(req.headers.host||'')));if(!['http:','https:'].includes(publicBase.protocol)||publicBase.username||publicBase.password||publicBase.pathname!=='/'||publicBase.search||publicBase.hash||(IS_PROD&&publicBase.protocol!=='https:'))throw new Error('Invalid public base URL');}catch{return fail(res,503,'Invalid PUBLIC_BASE_URL configuration');}
     const state=crypto.randomBytes(24).toString('hex');
-    res.writeHead(302,{location:'https://github.com/login/oauth/authorize?client_id='+encodeURIComponent(process.env.GITHUB_CLIENT_ID)+'&redirect_uri='+encodeURIComponent((IS_PROD?'https':'http')+'://'+req.headers.host+'/api/auth/callback')+'&scope=read%3Auser&state='+state,'set-cookie':'ali_oauth_state='+state+'; Path=/; HttpOnly; SameSite=Lax; Max-Age=600'+(IS_PROD?'; Secure':'')});return res.end();
+    res.writeHead(302,{location:'https://github.com/login/oauth/authorize?client_id='+encodeURIComponent(process.env.GITHUB_CLIENT_ID)+'&redirect_uri='+encodeURIComponent(publicBase.origin+'/api/auth/callback')+'&scope=read%3Auser&state='+state,'set-cookie':'ali_oauth_state='+state+'; Path=/; HttpOnly; SameSite=Lax; Max-Age=600'+(IS_PROD?'; Secure':'')});return res.end();
   }
   if(pathname==='/api/auth/callback'&&req.method==='GET'){
     const q=u.searchParams;const stateCookie=parseCookies(req).ali_oauth_state;
@@ -307,10 +309,13 @@ async function serveStatic(req,res) {
   try{const st=await fs.stat(target);if(!st.isFile())return fail(res,404,'Not found');const data=await fs.readFile(target);const type=path.extname(target)==='.html'?'text/html; charset=utf-8':path.extname(target)==='.js'?'text/javascript; charset=utf-8':path.extname(target)==='.css'?'text/css; charset=utf-8':path.extname(target)==='.json'?'application/json; charset=utf-8':'application/octet-stream';res.writeHead(200,{'content-type':type,'x-content-type-options':'nosniff','referrer-policy':'strict-origin-when-cross-origin','cache-control':path.extname(target)==='.html'?'no-cache':'public, max-age=300'});return res.end(data);}catch{return fail(res,404,'Not found');}
 }
 async function main() {
+  if(IS_PROD&&(!process.env.SESSION_SECRET||Buffer.byteLength(process.env.SESSION_SECRET)<32))throw new Error('Production requires SESSION_SECRET with at least 32 bytes');
+  if(IS_PROD&&(!process.env.PUBLIC_BASE_URL||!/^https:\/\//i.test(process.env.PUBLIC_BASE_URL)))throw new Error('Production requires HTTPS PUBLIC_BASE_URL');
   await initStore();
   const server=http.createServer(function(req,res){
     Promise.resolve().then(function(){return req.url.startsWith('/api/')?handle(req,res):serveStatic(req,res);}).catch(function(e){console.error('Request failed:',e.message);if(!res.headersSent)fail(res,e.status||500,e.status?e.message:'Internal server error');else res.destroy();});
   });
+  server.requestTimeout=15000;server.headersTimeout=10000;server.keepAliveTimeout=5000;server.maxRequestsPerSocket=1000;
   server.listen(PORT,HOST,function(){console.log('Ali Labs listening on '+HOST+':'+PORT);console.log('Persistent file storage: '+DATA_DIR);});
   const cleanup=setInterval(function(){const now=Date.now();store.sessions=store.sessions.filter(function(s){return Date.parse(s.expires_at)>now;});for(const [key,v] of hits)if(now-v.start>3600000)hits.delete(key);persist().catch(function(e){console.error('Cleanup save failed:',e.message);});},60*60*1000);
   cleanup.unref();
