@@ -17,6 +17,7 @@ const MAX_UPLOAD = 100 * 1024 * 1024;
 const IS_PROD = process.env.NODE_ENV === 'production';
 const DB_FILE = path.join(DATA_DIR, 'store.json');
 const STATIC_EXTS = new Set(['.html','.css','.js','.json','.svg','.png','.jpg','.jpeg','.webp','.ico','.woff','.woff2','.txt']);
+const CONTENT_SECURITY_POLICY="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com 'unsafe-inline'; style-src 'self' https: 'unsafe-inline'; img-src 'self' https: data:; font-src 'self' https://fonts.gstatic.com data:; media-src 'self' https: blob:; connect-src 'self' https://api.github.com https://github.com; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://github.com; upgrade-insecure-requests";
 
 function id() { return crypto.randomUUID(); }
 function tokenHash(token) { const secret=process.env.SESSION_SECRET || (!IS_PROD ? 'local-development-only-change-before-production' : ''); if(!secret)throw new Error('SESSION_SECRET is required'); return crypto.createHmac('sha256', secret).update(String(token || '')).digest('hex'); }
@@ -27,7 +28,7 @@ function json(res, status, data, headers) {
     'cache-control':'no-store',
     'x-content-type-options':'nosniff',
     'referrer-policy':'strict-origin-when-cross-origin',
-    'content-security-policy':"default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com 'unsafe-inline'; style-src 'self' https: 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https://api.github.com https://github.com; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://github.com; upgrade-insecure-requests",'cross-origin-opener-policy':'same-origin','cross-origin-resource-policy':'same-origin',
+    'content-security-policy':CONTENT_SECURITY_POLICY,'cross-origin-opener-policy':'same-origin','cross-origin-resource-policy':'same-origin',
     'permissions-policy':'camera=(), microphone=(), geolocation=()'
   }, headers || {}));
   res.end(body);
@@ -342,7 +343,7 @@ async function serveStatic(req,res) {
   const privateFiles=new Set(['server.js','package.json','package-lock.json','README.md','SETUP.md']);
   const dataPrefix=DATA_DIR+path.sep;
   if(!target.startsWith(ROOT+path.sep)||!STATIC_EXTS.has(path.extname(target).toLowerCase())||target===DATA_DIR||target.startsWith(dataPrefix)||segments.some(function(x){return x.startsWith('.');})||privateRoots.has(segments[0])||privateFiles.has(segments[0]))return fail(res,404,'Not found');
-  try{const st=await fs.stat(target);if(!st.isFile())return fail(res,404,'Not found');const data=await fs.readFile(target);const type=path.extname(target)==='.html'?'text/html; charset=utf-8':path.extname(target)==='.js'?'text/javascript; charset=utf-8':path.extname(target)==='.css'?'text/css; charset=utf-8':path.extname(target)==='.json'?'application/json; charset=utf-8':'application/octet-stream';res.writeHead(200,{'content-type':type,'x-content-type-options':'nosniff','referrer-policy':'strict-origin-when-cross-origin','cache-control':path.extname(target)==='.html'?'no-cache':'public, max-age=300'});return res.end(data);}catch{return fail(res,404,'Not found');}
+  try{const st=await fs.stat(target);if(!st.isFile())return fail(res,404,'Not found');const data=await fs.readFile(target);const type=path.extname(target)==='.html'?'text/html; charset=utf-8':path.extname(target)==='.js'?'text/javascript; charset=utf-8':path.extname(target)==='.css'?'text/css; charset=utf-8':path.extname(target)==='.json'?'application/json; charset=utf-8':'application/octet-stream';res.writeHead(200,{'content-type':type,'x-content-type-options':'nosniff','referrer-policy':'strict-origin-when-cross-origin','content-security-policy':CONTENT_SECURITY_POLICY,'permissions-policy':'camera=(), microphone=(), geolocation=()','cross-origin-opener-policy':'same-origin','cross-origin-resource-policy':'same-origin','x-frame-options':'DENY',...(IS_PROD?{'strict-transport-security':'max-age=31536000; includeSubDomains'}:{}),'cache-control':path.extname(target)==='.html'?'no-cache':'public, max-age=300'});return res.end(data);}catch{return fail(res,404,'Not found');}
 }
 async function main() {
   if(IS_PROD&&(!process.env.SESSION_SECRET||Buffer.byteLength(process.env.SESSION_SECRET)<32))throw new Error('Production requires SESSION_SECRET with at least 32 bytes');
