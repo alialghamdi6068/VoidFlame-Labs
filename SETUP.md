@@ -33,7 +33,14 @@ The server derives the OAuth callback from the current host: \`https://YOUR_DOMA
 - \`data-local/store.json\`: users, sessions, projects, versions, comments, reports, audit records, and analytics.
 - \`data-local/uploads/quarantine/\`: new uploads awaiting trusted scanning/review.
 - \`data-local/uploads/\`: released files after they have passed the release workflow.
-- Files are written using a temporary file and atomic rename. Ten local snapshots are rotated every 30 minutes under `DATA_DIR/backups/`; keep a separate backup outside the host account and test restoration before production launch.
+- Files are written using a temporary file and atomic rename. Ten local snapshots of `store.json` and uploaded files are rotated every 30 minutes under `DATA_DIR/backups/snapshot-*/`. Uploaded files are hard-linked when supported, so snapshots may share disk blocks with live uploads. Keep a separate backup outside the host account and test restoration before production launch.
+
+### Restore a local snapshot
+
+1. Stop the Node.js process before restoring any files.
+2. Choose a valid `DATA_DIR/backups/snapshot-*` directory.
+3. Restore its `store.json` to `DATA_DIR/store.json` and its `uploads/` directory to `DATA_DIR/uploads/` (replace the live uploads directory only while the server is stopped).
+4. Restart the server and verify `/api/health`, project listings, and a known download. Keep an off-host backup because local snapshots cannot protect against host or disk loss.
 - Upload processing is capped at three concurrent uploads per process to reduce memory-exhaustion risk.
 
 ## Important security limitations

@@ -72,15 +72,33 @@ async function persist() {
   });
   return writeQueue;
 }
+async function mirrorBackupDirectory(source,destination) {
+  await fs.mkdir(destination,{recursive:true,mode:0o700});
+  let entries;try{entries=await fs.readdir(source,{withFileTypes:true});}catch(e){if(e.code==='ENOENT')return;throw e;}
+  for(const entry of entries) {
+    const from=path.join(source,entry.name);const to=path.join(destination,entry.name);
+    if(entry.isDirectory())await mirrorBackupDirectory(from,to);
+    else if(entry.isFile()) {
+      try { await fs.link(from,to); }
+      catch { await fs.copyFile(from,to);await fs.chmod(to,0o600); }
+    }
+  }
+}
 async function createBackup() {
   await fs.mkdir(BACKUP_DIR,{recursive:true,mode:0o700});
   try { await fs.access(DB_FILE); } catch { return; }
   const stamp=new Date().toISOString().replace(/[:.]/g,'-');
-  const destination=path.join(BACKUP_DIR,'store-'+stamp+'.json');
-  await fs.copyFile(DB_FILE,destination);
-  await fs.chmod(destination,0o600);
-  const files=(await fs.readdir(BACKUP_DIR)).filter(function(name){return /^store-.*\.json$/.test(name);}).sort().reverse();
-  for(const old of files.slice(BACKUP_KEEP))await fs.unlink(path.join(BACKUP_DIR,old)).catch(function(){});
+  const destination=path.join(BACKUP_DIR,'snapshot-'+stamp);
+  await fs.mkdir(destination,{recursive:false,mode:0o700});
+  try {
+    const snapshotFile=path.join(destination,'store.json');
+    await fs.copyFile(DB_FILE,snapshotFile);await fs.chmod(snapshotFile,0o600);
+    await mirrorBackupDirectory(UPLOAD_DIR,path.join(destination,'uploads'));
+  } catch(e) { await fs.rm(destination,{recursive:true,force:true}).catch(function(){});throw e; }
+  const snapshots=(await fs.readdir(BACKUP_DIR,{withFileTypes:true})).filter(function(entry){return entry.isDirectory()&&/^snapshot-/.test(entry.name);}).map(function(entry){return entry.name;}).sort().reverse();
+  for(const old of snapshots.slice(BACKUP_KEEP))await fs.rm(path.join(BACKUP_DIR,old),{recursive:true,force:true});
+  const legacy=(await fs.readdir(BACKUP_DIR)).filter(function(name){return /^store-.*\.json$/.test(name);});
+  for(const old of legacy)await fs.unlink(path.join(BACKUP_DIR,old)).catch(function(){});
 }
 async function initStore() {
   await fs.mkdir(DATA_DIR,{recursive:true,mode:0o700});

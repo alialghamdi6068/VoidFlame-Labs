@@ -23,7 +23,7 @@ Application data is stored in \`data-local/store.json\`; uploads are stored in \
 - Session token hashes use HMAC-SHA-256; production requires a strong `SESSION_SECRET` and a canonical HTTPS `PUBLIC_BASE_URL`.
 - Project submissions and release versions require moderation.
 - Upload concurrency is bounded; download analytics are capped to prevent unbounded memory growth.
-- Local JSON snapshots are copied to a rotating set of ten backups every 30 minutes.
+- Local snapshots of the JSON database and uploaded files are rotated to ten backups every 30 minutes. Uploads are hard-linked when supported to reduce duplicate disk use.
 - Uploaded files are quarantined; extension/signature checks are not malware scanning.
 - Live OAuth, production HTTPS, persistent-disk behavior, backups/restore, and a trusted malware-scanning workflow must be verified on the target host before public launch.
 
