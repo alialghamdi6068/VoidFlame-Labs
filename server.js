@@ -76,7 +76,7 @@ async function createBackup() {
   try { await fs.access(DB_FILE); } catch { return; }
   const stamp=new Date().toISOString().replace(/[:.]/g,'-');
   const destination=path.join(BACKUP_DIR,'store-'+stamp+'.json');
-  await fs.copyFile(DB_FILE,destination,fs.constants.COPYFILE_EXCL);
+  await fs.copyFile(DB_FILE,destination);
   await fs.chmod(destination,0o600);
   const files=(await fs.readdir(BACKUP_DIR)).filter(function(name){return /^store-.*\.json$/.test(name);}).sort().reverse();
   for(const old of files.slice(BACKUP_KEEP))await fs.unlink(path.join(BACKUP_DIR,old)).catch(function(){});
