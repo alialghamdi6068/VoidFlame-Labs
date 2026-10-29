@@ -95,3 +95,18 @@ test('project catalogue supports bounded pagination and metadata', async functio
   assert.equal(result.pagination.total,0);
   assert.deepEqual(result.projects,[]);
 });
+
+
+test('local database files are never served by the static file handler', async function(t) {
+  const dir=path.join(__dirname,'..','data-local-test-'+Date.now()+'-'+Math.floor(Math.random()*1000000));
+  const port=47000+Math.floor(Math.random()*10000);
+  await fs.mkdir(dir,{recursive:true});
+  await fs.writeFile(path.join(dir,'store.json'),JSON.stringify({private:'must-not-be-served'}));
+  const child=spawn(process.execPath,[path.join(__dirname,'..','server.js')],{env:{...process.env,DATA_DIR:dir,PORT:String(port),HOST:'127.0.0.1',NODE_ENV:'test'},stdio:'ignore'});
+  t.after(async function(){child.kill('SIGTERM');await fs.rm(dir,{recursive:true,force:true});});
+  let response;
+  for(let i=0;i<50;i++){try{response=await fetch('http://127.0.0.1:'+port+'/'+path.basename(dir)+'/store.json');break;}catch{await new Promise(function(r){setTimeout(r,100);});}}
+  assert.ok(response,'server did not start');
+  assert.equal(response.status,404);
+  assert.equal(await response.text(),'{"error":"Not found"}');
+});

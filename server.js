@@ -338,7 +338,8 @@ async function serveStatic(req,res) {
   try{pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);}catch{return fail(res,400,'Invalid URL');}
   if(pathname==='/')pathname='/index.html';
   const target=path.resolve(ROOT,'.'+pathname);
-  if(!target.startsWith(ROOT+path.sep)||!STATIC_EXTS.has(path.extname(target).toLowerCase()))return fail(res,404,'Not found');
+  const dataPrefix=DATA_DIR+path.sep;
+  if(!target.startsWith(ROOT+path.sep)||!STATIC_EXTS.has(path.extname(target).toLowerCase())||target===DATA_DIR||target.startsWith(dataPrefix))return fail(res,404,'Not found');
   try{const st=await fs.stat(target);if(!st.isFile())return fail(res,404,'Not found');const data=await fs.readFile(target);const type=path.extname(target)==='.html'?'text/html; charset=utf-8':path.extname(target)==='.js'?'text/javascript; charset=utf-8':path.extname(target)==='.css'?'text/css; charset=utf-8':path.extname(target)==='.json'?'application/json; charset=utf-8':'application/octet-stream';res.writeHead(200,{'content-type':type,'x-content-type-options':'nosniff','referrer-policy':'strict-origin-when-cross-origin','cache-control':path.extname(target)==='.html'?'no-cache':'public, max-age=300'});return res.end(data);}catch{return fail(res,404,'Not found');}
 }
 async function main() {
