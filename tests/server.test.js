@@ -110,3 +110,16 @@ test('local database files are never served by the static file handler', async f
   assert.equal(response.status,404);
   assert.equal(await response.text(),'{"error":"Not found"}');
 });
+
+
+test('static handler does not expose backend or private source files', async function(t) {
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'ali-labs-test-'));
+  const port=48000+Math.floor(Math.random()*10000);
+  const child=spawn(process.execPath,[path.join(__dirname,'..','server.js')],{env:{...process.env,DATA_DIR:dir,PORT:String(port),HOST:'127.0.0.1',NODE_ENV:'test'},stdio:'ignore'});
+  t.after(async function(){child.kill('SIGTERM');await fs.rm(dir,{recursive:true,force:true});});
+  for(let i=0;i<50;i++){try{await fetch('http://127.0.0.1:'+port+'/api/health');break;}catch{await new Promise(function(r){setTimeout(r,100);});}}
+  for(const file of ['/server.js','/package.json','/tests/server.test.js','/worker/src/index.js','/.git/config']) {
+    const response=await fetch('http://127.0.0.1:'+port+file);
+    assert.equal(response.status,404,file+' must not be publicly served');
+  }
+});
